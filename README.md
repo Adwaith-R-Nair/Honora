@@ -602,7 +602,7 @@ Etherscan: https://sepolia.etherscan.io/address/0xf4e1c0179acC2A54C195e8687621ee
 |---|---|
 | Adwaith R Nair | Blockchain + Backend + Testing |
 | Diya | AI Layer [NLP Querying] (FastAPI + Qdrant + sentence-transformers) + Documentation |
-| Abhijith A | Frontend (React) + Testing |
-| Meghna |	Cross-Case Linkage + Frontend (React) + Documentation|
+| Abhi | Frontend (React) + testing |
+| Meghna | Cross-Case Linkage + Frontend (React) + documentation |
 
 ---
