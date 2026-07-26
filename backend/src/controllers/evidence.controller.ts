@@ -106,7 +106,7 @@ export async function uploadEvidence(
           "Content-Type": "application/json",
           "Authorization": req.headers.authorization ?? "",
         },
-        body: JSON.stringify({ evidenceId }),
+        body: JSON.stringify({ evidenceId: evidenceId.toString() }),
       });
       console.log(`[AI] Indexed evidenceId ${evidenceId} in Qdrant`);
     } catch {

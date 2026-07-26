@@ -5,6 +5,7 @@ Now includes WebSocket support for real-time cross-case linkage notifications.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from typing import Any
@@ -21,7 +22,7 @@ from cross_case import find_linked_cases
 from embeddings import embed_text
 from preprocessing import chunk_text, extract_full
 from search import semantic_search
-from vector_store import ensure_collection, upsert_evidence
+from vector_store import ensure_collection, get_client, upsert_evidence
 
 load_dotenv()
 
@@ -68,11 +69,25 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# ── Qdrant keep-alive (prevents free-tier cluster suspension) ─────────────
+async def _keep_qdrant_alive():
+    """Ping Qdrant every 12 hours to prevent free-tier cluster suspension."""
+    while True:
+        await asyncio.sleep(12 * 60 * 60)  # 12 hours
+        try:
+            get_client().get_collections()
+            print("[KeepAlive] Qdrant pinged successfully")
+        except Exception as e:
+            print(f"[KeepAlive] Qdrant ping failed: {e}")
+
+
 # ── Lifespan ──────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_collection()
+    task = asyncio.create_task(_keep_qdrant_alive())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Honora EMS – AI Service", lifespan=lifespan)
@@ -125,6 +140,7 @@ async def _index_single_file(
 ) -> dict[str, Any]:
     if not ipfs_url:
         return {"status": "skipped", "reason": "no file URL", "id": point_id}
+    filename = filename or ""
     if not any(filename.lower().endswith(ext) for ext in SUPPORTED_EXTENSIONS):
         return {"status": "skipped", "reason": "not a supported document type", "id": point_id}
 

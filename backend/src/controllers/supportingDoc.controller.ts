@@ -100,6 +100,24 @@ export async function uploadSupportingDoc(
     );
     console.log(`[SupportingDoc] TX: ${txHash}`);
 
+    // Step 6: Get docId + save to MongoDB
+    // Must happen BEFORE notifying the AI service — /api/index-supporting reads
+    // this record back from the backend, and needs it to already exist.
+    const docId = await getSupportingDocCount();
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    await SupportingDoc.create({
+      docId,
+      evidenceId,
+      docType,
+      filename:   originalname,
+      ipfsCID,
+      ipfsUrl,
+      fileHash,
+      uploadedBy: req.user?.walletAddress ?? "",
+      timestamp,
+    });
+
     // ── Notify AI service for supporting doc indexing (non-blocking) ─────────
     try {
       await fetch(`${ENV.AI_SERVICE_URL}/api/index-supporting`, {
@@ -115,22 +133,6 @@ export async function uploadSupportingDoc(
       console.log(`[AI] Service unavailable — skipping supporting doc indexing`);
     }
 // ─────────────────────────────────────────────────────────────────────────
-
-    // Step 6: Get docId + save to MongoDB
-    const docId = await getSupportingDocCount();
-    const timestamp = Math.floor(Date.now() / 1000);
-
-    await SupportingDoc.create({
-      docId,
-      evidenceId,
-      docType,
-      filename:   originalname,
-      ipfsCID,
-      ipfsUrl,
-      fileHash,
-      uploadedBy: req.user?.walletAddress ?? "",
-      timestamp,
-    });
 
     console.log(`[SupportingDoc] Saved to MongoDB: docId ${docId}`);
 

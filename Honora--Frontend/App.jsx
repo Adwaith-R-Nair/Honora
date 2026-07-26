@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "./src/components/common/useAuth";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./src/components/common/useAuth";
 import { ParticleField } from "./src/components/common/Shared";
 import ProtectedRoute from "./src/components/common/ProtectedRoute";
 
@@ -32,6 +32,22 @@ const LandingPage = () => (
   </>
 );
 
+const roleRoutes = {
+  Police: "/dashboard/police",
+  Forensic: "/dashboard/forensic",
+  Lawyer: "/dashboard/lawyer",
+  Judge: "/dashboard/judge",
+};
+
+// Bounces an already-authenticated user straight to their dashboard instead of
+// showing the public landing/role-selection screens.
+function RedirectIfAuthed({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (user) return <Navigate to={roleRoutes[user.role] || "/role"} replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -40,8 +56,8 @@ export default function App() {
         <Navbar />
         <CrossCasePopup />
         <Routes>
-          <Route path="/"                          element={<LandingPage />} />
-          <Route path="/role"                      element={<RoleSelection />} />
+          <Route path="/"                          element={<RedirectIfAuthed><LandingPage /></RedirectIfAuthed>} />
+          <Route path="/role"                      element={<RedirectIfAuthed><RoleSelection /></RedirectIfAuthed>} />
 
           <Route path="/dashboard/police"          element={<ProtectedRoute role="Police"><PoliceDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/police/case/:id" element={<ProtectedRoute role="Police"><CaseDetails /></ProtectedRoute>} />
