@@ -1,5 +1,11 @@
 import { defineConfig } from "hardhat/config";
 import hardhatEthers from "@nomicfoundation/hardhat-ethers";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL ?? "";
+const SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY;
 
 export default defineConfig({
   plugins: [hardhatEthers],
@@ -11,8 +17,8 @@ export default defineConfig({
     },
     sepolia: {
       type: "http",
-      url: "https://eth-sepolia.g.alchemy.com/v2/LH0gLLTo5hzFXYcyaUh9b",
-      accounts: ["0xf0181804a7e4f704a28db90c848c9b6960c14487f83594a31f48c55474c28ea1"],
+      url: SEPOLIA_RPC_URL,
+      accounts: SEPOLIA_PRIVATE_KEY ? [SEPOLIA_PRIVATE_KEY] : [],
     },
   },
 });
