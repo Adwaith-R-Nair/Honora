@@ -9,6 +9,7 @@ detail you need.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System-level design — component diagram, tech stack rationale, data storage strategy, deployment topology, key architectural decisions | You want the big picture of *how the system is structured* and *why each technology was chosen* |
 | [HLD.md](HLD.md) | Module-level design — responsibility breakdown per module, workflow sequence diagrams (evidence upload, custody transfer, search, cross-case linkage), RBAC design | You want to understand *how data flows* through the system for each major feature |
 | [LLD.md](LLD.md) | Implementation-level design — smart contract function specs, database schemas, full REST/WebSocket API contracts, the actual algorithms (chunking, ranking, cross-case logic) | You're implementing, debugging, or need the exact contract/API/algorithm details |
+| [ROADMAP.md](ROADMAP.md) | Post-MVP plan — Phase 8 onward (DevOps, blockchain hardening, AI expansion, real-world narrative, demo readiness) | You want to know what's coming next, in what order, and why |
 
 ## Outside `docs/`
 
@@ -20,6 +21,6 @@ detail you need.
 
 ## Document scope note
 
-These four documents describe **what has been built** (Phases 1–7, all complete). Next-phase
-plans (DevOps/CI-CD, blockchain hardening, OCR, etc.) will get their own documentation once
-scoped and built, rather than being folded into these as speculative future-tense content.
+`PRD.md`, `ARCHITECTURE.md`, `HLD.md`, and `LLD.md` describe **what has been built** (Phases 1–7,
+all complete). `ROADMAP.md` is the exception — it's intentionally forward-looking, covering Phase
+8 onward, and will be revised as each phase actually ships rather than staying a frozen prediction.

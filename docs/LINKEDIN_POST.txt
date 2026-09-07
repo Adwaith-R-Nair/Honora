@@ -1,0 +1,23 @@
+A piece of evidence gets logged into a case file. Months later, in court, someone asks: how do you know this hasn't been altered since the day it was collected? For most systems in use today — paper logs, spreadsheets, a departmental database — the honest answer is: you don't, not really. You trust the record-keeper.
+
+That question is what turned our B.Tech mini project into something we haven't stopped building. Four of us set out to make chain-of-custody something you could verify yourself, not something you had to trust.
+
+Here's what we built. Every file gets SHA-256 hashed and stored on IPFS — never on the blockchain itself, that's prohibitively expensive. Only the hash and its IPFS address go into an immutable Solidity smart contract, alongside every custody handoff, permanently. Change one byte of the original file, and the hash you recompute won't match. No procedural trust required — just math anyone can check.
+
+We enforced role-based access twice: once in the app, for a fast, friendly rejection, and again inside the smart contract itself — so even a broken frontend can't let an unauthorized wallet register evidence on-chain. The contract is the real gatekeeper, not the API.
+
+Then came the part we're proudest of. We added an AI layer — documents get chunked, embedded, and made searchable by meaning, not just keywords. Every new upload is automatically compared against every other case in the system, and if it's genuinely similar to something elsewhere, every connected user gets a live alert. The system finds connections between cases that nobody asked it to look for.
+
+It's live and independently verifiable right now on Ethereum Sepolia: 0xf4e1c0179acC2A54C195e8687621ee070be06B3C — go check it yourself, that's the entire point of building on a public chain instead of asking anyone to take our word for it.
+
+None of this was solo work:
+• Diya — owned the AI layer end-to-end, extraction through search
+• Abhijith [last name] — built the frontend, and worked the blockchain layer too
+• Meghna [last name] — cross-case linkage and the AI layer
+• Me (Adwaith) — the smart contract, backend, and the RBAC architecture holding it all together
+
+We're not stopping here. Multi-sig governance, individual on-chain identity per user, OCR for image evidence, and a real legal-admissibility mapping are already scheduled — and we're writing this up to submit as a paper and present at a conference. A mini project deadline was never meant to be the finish line.
+
+If you work in blockchain, legal-tech, or applied AI — or just like systems where the hard part was the tradeoffs and not the demo screenshot — I'd like to talk.
+
+#Blockchain #Solidity #Ethereum #LegalTech #ArtificialIntelligence #Web3
