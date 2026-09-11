@@ -1,7 +1,9 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { ethers } from "ethers";
 import { User, type UserRole } from "../models/user.model.js";
 import { ENV } from "../config/env.js";
+import { getOnChainRole } from "./contract.service.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface RegisterPayload {
@@ -40,6 +42,23 @@ export async function registerUser(payload: RegisterPayload) {
   });
   if (existingWallet) {
     throw new Error("Wallet address already registered");
+  }
+
+  // ── On-chain role verification ────────────────────────────────────────────
+  // A user may only register with the role their wallet actually holds
+  // on-chain (assigned via the contract owner's assignRole). Without this,
+  // `role` would be a free-text claim the client could set to anything.
+  if (!ethers.isAddress(walletAddress)) {
+    throw new Error("Invalid wallet address");
+  }
+
+  const onChainRole = await getOnChainRole(walletAddress);
+  if (onChainRole !== role) {
+    throw new Error(
+      onChainRole === "None"
+        ? "This wallet has not been assigned a role on-chain. Contact the system administrator."
+        : `This wallet is assigned the '${onChainRole}' role on-chain, not '${role}'.`
+    );
   }
 
   // Hash password

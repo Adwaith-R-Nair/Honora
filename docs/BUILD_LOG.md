@@ -53,13 +53,32 @@ Goal (from `docs/ROADMAP.md`): a repo that catches its own regressions, zero out
 security debt.
 
 Planned scope (to be broken into individual commits before work starts):
-- [ ] Rotate leaked Sepolia key / Alchemy API key (operational, not a commit)
-- [ ] GitHub secret scanning + push protection + Dependabot (repo settings, not a commit)
-- [ ] Hardhat contract test suite (Mocha/Chai)
-- [ ] Backend integration tests (Vitest/Jest + supertest + mongodb-memory-server + local Hardhat node)
-- [ ] AI layer unit tests (pytest, `preprocessing.py` extraction/chunking)
+- [x] Rotate leaked Sepolia key / Alchemy API key (operational, not a commit — see 2026-09-10 above)
+- [x] GitHub secret scanning + push protection + Dependabot (repo settings, not a commit)
+- [x] Hardhat contract test suite (Mocha/Chai)
+- [x] Backend integration tests (Vitest + supertest + mongodb-memory-server + disposable Hardhat node)
+- [ ] AI layer unit tests (pytest, `preprocessing.py` extraction/chunking) — **also fix
+      `TECHNICAL_AND_SECURITY_AUDIT.md` Finding #2** (AI search's RBAC filter is dead code) as
+      part of this commit, deferred here deliberately
 - [ ] GitHub Actions CI (compile, typecheck, lint — ESLint/solhint/ruff, run all test suites, build frontend)
 - [ ] Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node
+
+### 2026-09-11 — c9cb304 — test: add Hardhat contract test suite for EvidenceRegistry
+Phase: 8 (commit 1 of planned scope)
+What changed: Installed `@nomicfoundation/hardhat-toolbox-mocha-ethers` (official Hardhat 3
+mocha+chai+ethers bundle, replacing the standalone `hardhat-ethers` plugin registration in
+`hardhat.config.ts`) plus `@nomicfoundation/hardhat-ethers-chai-matchers` and `@types/mocha`.
+Added `test/EvidenceRegistry.ts` — 29 tests covering all 5 role modifiers, duplicate-hash
+rejection (both `addEvidence` and `addSupportingDoc`), custody-transfer current-holder checks,
+every event emission, and the owner-only `assignRole`/`revokeRole` guards including zero-address
+rejection. Root `npm test` now runs `hardhat test` instead of the placeholder failing script.
+Gotchas: `node_modules` didn't exist in this dev environment at all — needed a fresh `npm install`
+first. `.to.not.be.reverted` is deprecated in this chai-matchers version; use `.to.not.revert(ethers)`
+instead. `hre.network.connect()` (used throughout `scripts/*.ts`) prints a deprecation warning in
+favor of `network.create()`/`getOrCreate()` — left as-is for consistency with existing scripts,
+non-blocking, candidate cleanup for later.
+Follow-ups spawned: none blocking; the `network.connect()` deprecation is worth revisiting
+project-wide at some point but doesn't fail anything today.
 
 ---
 

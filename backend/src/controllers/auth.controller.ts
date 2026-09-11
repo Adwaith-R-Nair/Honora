@@ -55,7 +55,11 @@ export async function register(req: Request, res: Response): Promise<void> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Registration failed";
-    const status = message.includes("already") ? 409 : 500;
+    const status = message.includes("already")
+      ? 409
+      : message.includes("on-chain") || message.includes("Invalid wallet address")
+        ? 403
+        : 500;
     res.status(status).json({ success: false, error: message });
   }
 }
