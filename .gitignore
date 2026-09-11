@@ -49,6 +49,9 @@ npm-debug.log*
 # Claude Code
 .claude/
 
+# Generated knowledge-graph output (regenerate with /graphify, not part of the product)
+graphify-out/
+
 # Test data (large binary files — seed from local test-data/)
 # Uncomment the line below if you don't want test data in the repo:
 # test-data/
@@ -56,3 +59,12 @@ npm-debug.log*
 # PRD documents
 Honora_EMS_PRD.docx.pdf
 Honora_EMS_PRD_extracted.txt
+
+CLAUDE.md
+
+# Docs
+PORTFOLIO_MASTER_PROMPT.md
+PRESENTATION_DEMO_GUIDE.md
+TWITTER_MASTER_PROMPT.md
+
+/social
