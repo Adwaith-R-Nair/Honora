@@ -24,19 +24,28 @@ const API_ROLES = {
   "Forensic Department": "Forensic",
 };
 
+// Mirrors backend/src/models/user.model.ts's DEPARTMENT_REQUIRED_ROLES —
+// Police/Forensic are operationally tied to a department (it scopes their AI
+// search results); Lawyer/Judge are cross-department oversight roles and
+// don't provide one.
+const DEPARTMENT_REQUIRED_ROLES = ["Police", "Forensic"];
+
 export default function LoginModal({ role, onClose, initialSignup = false }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
+  const [department, setDepartment] = useState("");
   const [isSignup, setIsSignup] = useState(initialSignup);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   const { login, signup } = useAuth();
   const navigate = useNavigate();
 
   const Icon = ROLE_ICONS[role] || ShieldIcon;
+  const backendRole = API_ROLES[role];
+  const departmentRequired = DEPARTMENT_REQUIRED_ROLES.includes(backendRole);
 
   const handleOverlay = (e) => {
     if (e.target === e.currentTarget) onClose();
@@ -60,6 +69,10 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
         setError("Wallet address is required.");
         return;
       }
+      if (departmentRequired && !department.trim()) {
+        setError(`Department is required for ${role}.`);
+        return;
+      }
     }
 
     setError("");
@@ -67,12 +80,16 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
 
     try {
       let result;
-      // Get the string your backend actually expects (e.g., "Police")
-      const backendRole = API_ROLES[role]; 
 
       if (isSignup) {
-        // Use backendRole here instead of the UI 'role' 
-        result = await signup(name.trim(), email.trim(), password.trim(), backendRole, walletAddress.trim());
+        result = await signup(
+          name.trim(),
+          email.trim(),
+          password.trim(),
+          backendRole,
+          walletAddress.trim(),
+          departmentRequired ? department.trim() : undefined
+        );
       } else {
         result = await login(email.trim(), password.trim());
       }
@@ -142,6 +159,20 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
                 placeholder="Your wallet address (e.g., 0x...)"
                 value={walletAddress}
                 onChange={(e) => setWalletAddress(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {/* Department Field (Signup Only, Police/Forensic only) */}
+          {isSignup && departmentRequired && (
+            <div className="input-group">
+              <label>Department</label>
+              <input
+                type="text"
+                placeholder="e.g. narcotics, robbery, homicide"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
                 required
               />
             </div>

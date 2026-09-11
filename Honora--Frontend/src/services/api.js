@@ -34,10 +34,10 @@ async function request(endpoint, options = {}, baseUrl = BASE_URL) {
 
 // ============ AUTHENTICATION ============
 
-export const signup = (name, email, password, role, walletAddress) =>
+export const signup = (name, email, password, role, walletAddress, department) =>
   request("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ name, email, password, role, walletAddress }),
+    body: JSON.stringify({ name, email, password, role, department, walletAddress }),
   });
 
 export const login = (email, password) =>

@@ -64,7 +64,7 @@ Planned scope (to be broken into individual commits before work starts):
   - [x] 3b. AI layer pytest suite (`preprocessing.py`) + implement real department-scoped
         `_build_rbac_filter()` in `search.py` (Finding #2, properly closed — needs 3a's JWT claim
         to exist first)
-  - [ ] 3c. Frontend: collect `department` in Police/Forensic signup UI
+  - [x] 3c. Frontend: collect `department` in Police/Forensic signup UI
 - [ ] GitHub Actions CI (compile, typecheck, lint — ESLint/solhint/ruff, run all test suites, build frontend)
 - [ ] Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node
 
@@ -135,7 +135,7 @@ changes, just new field values threaded through.
 Follow-ups spawned: 3b (AI layer — implement the actual department-scoped filter using this new
 claim, pytest suite) and 3c (frontend signup form needs a department field) are next.
 
-### 2026-09-11 — test: add AI layer pytest suite, implement department-scoped search (commit 3b)
+### 2026-09-11 — db0cd7e — test: add AI layer pytest suite, implement department-scoped search (commit 3b)
 Phase: 8 (commit 3b of planned scope)
 What changed: `search.py`'s `_build_rbac_filter()` now actually scopes Qdrant results by
 `department` when the caller's JWT carries one (Finding #2, closed — the claim exists for real
@@ -162,6 +162,27 @@ still has no torch installed at all and the full suite runs in under a second.
 Follow-ups spawned: 3c (frontend signup form needs a department field, otherwise Police/Forensic
 signup will now fail against the real backend) is next and is not optional — it's the UI catching
 up to a backend contract change already live.
+
+### 2026-09-11 — feat: collect department in Police/Forensic signup UI (commit 3c)
+Phase: 8 (commit 3c of planned scope — closes out the Finding #2 department feature)
+What changed: `LoginModal.jsx` now shows a "Department" text input (only during signup, only for
+Police/Forensic — mirrors `DEPARTMENT_REQUIRED_ROLES` from the backend) between Wallet Address
+and Password, with client-side required-field validation matching the backend's. Threaded through
+`useAuth.jsx`'s `signup()` and `api.js`'s `signup()` (both gained an optional `department` param;
+`JSON.stringify` naturally omits it from the request body when `undefined`, which is exactly
+correct for Lawyer/Judge).
+Verified live end-to-end in the browser (real Hardhat node + disposable Mongo + Vite dev server,
+torn down after): registered a Police account against the real on-chain Police wallet
+(Hardhat account #1) with department "narcotics" — succeeded, redirected to the Police dashboard
+showing "Officer Rajan · Police". Regression-checked Legal Counsel (Lawyer) signup: no Department
+field shown at all, form has exactly Email/Name/Wallet/Password as before.
+Gotchas: a stale "Fake Judge" session in the browser's localStorage (left over from earlier
+manual audit testing, pointing at data that no longer exists post-Mongo-reset) redirected `/role`
+straight back to the dashboard — `localStorage.clear()` via the JS console tool was needed before
+the role-selection page would actually render; the in-app Logout button click didn't clear it
+reliably in this test sequence, worth a look if it recurs for a real user.
+Follow-ups spawned: none blocking. This closes out Finding #2 and the department feature (3a+3b+3c)
+entirely. Next up: Phase 8 commit 4 — GitHub Actions CI.
 
 ---
 

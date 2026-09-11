@@ -28,13 +28,14 @@ export const AuthProvider = ({ children }) => {
    * @param {string} password - Password
    * @param {string} role - User role
    * @param {string} walletAddress - Wallet address
+   * @param {string} [department] - Required for Police/Forensic, optional for Lawyer/Judge
    */
-  const signup = async (name, email, password, role, walletAddress) => {
+  const signup = async (name, email, password, role, walletAddress, department) => {
     try {
       setError(null);
       setLoading(true);
 
-      const response = await api.signup(name, email, password, role, walletAddress);
+      const response = await api.signup(name, email, password, role, walletAddress, department);
 
       // Response from backend: { success: true, token: "...", user: {...} }
       const loginData = response.data || response;
