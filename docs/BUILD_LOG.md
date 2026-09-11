@@ -47,7 +47,8 @@ Not a commit (no code changed). Done ahead of Phase 8's first commit at Adwaith'
 
 ## Phase 8 — DevOps Foundation & Security Hygiene
 
-**Status:** Not started — plan pending.
+**Status:** In progress — 5 of 6 planned items done (the RBAC audit findings expanded item 3 into
+3a/3b/3c along the way). Only Dockerization remains.
 
 Goal (from `docs/ROADMAP.md`): a repo that catches its own regressions, zero outstanding known
 security debt.
@@ -66,7 +67,7 @@ Planned scope (to be broken into individual commits before work starts):
         to exist first)
   - [x] 3c. Frontend: collect `department` in Police/Forensic signup UI
   - [x] 4. Linting (ESLint × 2, solhint, ruff) + fix violations
-  - [ ] 5. GitHub Actions CI pipeline (compile, typecheck, lint, run all test suites, build frontend)
+  - [x] 5. GitHub Actions CI pipeline (compile, typecheck, lint, run all test suites, build frontend)
 - [ ] Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node
 
 ### 2026-09-11 — c9cb304 — test: add Hardhat contract test suite for EvidenceRegistry
@@ -185,7 +186,7 @@ reliably in this test sequence, worth a look if it recurs for a real user.
 Follow-ups spawned: none blocking. This closes out Finding #2 and the department feature (3a+3b+3c)
 entirely. Next up: Phase 8 commit 4 — GitHub Actions CI.
 
-### 2026-09-11 — chore: add linting (ESLint, solhint, ruff) and fix violations (commit 4)
+### 2026-09-11 — 66e1eea — chore: add linting (ESLint, solhint, ruff) and fix violations (commit 4)
 Phase: 8 (commit 4 of planned scope)
 What changed: zero linting infrastructure existed anywhere in the project before this. Added:
 - `backend/eslint.config.js` — ESLint 10 + typescript-eslint, flat config. One real finding:
@@ -232,6 +233,39 @@ choices (resilience-over-strictness, FastAPI's DI pattern, TS's namespace-augmen
 Follow-ups spawned: full NatSpec documentation pass on the contract (worth doing, not urgent);
 wrapping the 7 flagged fetch functions in `useCallback` to close the `exhaustive-deps` warnings
 cleanly. Neither blocks anything. Next: commit 5, the GitHub Actions CI pipeline itself.
+
+### 2026-09-11 — ci: add GitHub Actions pipeline (commit 5)
+Phase: 8 (commit 5 of planned scope — closes out Phase 8 except Dockerization)
+What changed: `.github/workflows/ci.yml`, 4 parallel jobs on push/PR to `main`:
+- `contracts` — `npm ci`, `npm run lint` (solhint), `npx hardhat compile`, `npm test` (29 Mocha tests)
+- `backend` — installs root deps + compiles the contract independently (jobs run on separate VMs;
+  `contract.service.ts` and the test suite's own global-setup both need the compiled artifact at
+  import time, so duplicating the compile step is simpler and more reliable than passing build
+  artifacts between jobs), then `npm ci`/`npm run build` (typecheck)/`npm run lint`/`npm test`
+  (35 Vitest tests) inside `backend/`
+- `frontend` — `npm ci`/`npm run lint`/`npm run build` inside `Honora--Frontend/`
+- `ai-layer` — Python 3.12, `pip install -r requirements-dev.txt`, `ruff check .`, `pytest`
+  (36 tests) inside `ailayer-querying/` — no external services touched, matching how those tests
+  were built (in-memory DOCX/PDF fixtures, `embeddings`/`vector_store` stubbed via `sys.modules`)
+`concurrency` cancels superseded runs on the same ref; `permissions: contents: read` (minimal).
+Verification: installed `act` (local GitHub Actions runner, needs Docker) and ran the `contracts`
+job for real — `actions/checkout`, `actions/setup-node`, `npm ci`, and `npm run lint` all executed
+inside a real container and solhint's output matched local results exactly (56 warnings, 0
+errors). The run stalled downloading the Solidity compiler partway through `hardhat compile`
+(nested Docker networking in this sandbox, unrelated to the workflow itself) and was stopped
+there rather than fought further. The `backend`/`frontend`/`ai-layer` jobs were not run end-to-end
+through `act` — confidence in them instead rests on: (a) they use the same `actions/checkout` +
+`actions/setup-node`/`setup-python` pattern just verified working, and (b) every command they run
+(`npm run build`, `npm run lint`, `npm test`, `pip install -r requirements-dev.txt`,
+`ruff check .`, `pytest`) was already independently verified passing, repeatedly, in commits 1-4
+this session. This is a real gap versus a full act run of all 4 jobs — worth a look if the first
+real GitHub-hosted run surfaces anything `act`'s partial run didn't.
+Gotchas: none in the workflow file itself; the friction was entirely `act`'s local Docker-in-
+sandbox environment, not the CI logic.
+Follow-ups spawned: watch the first real push/PR run on GitHub's actual runners to confirm the
+backend/frontend/ai-layer jobs behave as expected — the local verification is strong but not
+exhaustive. Phase 8 now has exactly one item left: Dockerize backend + AI service +
+docker-compose.yml.
 
 ---
 

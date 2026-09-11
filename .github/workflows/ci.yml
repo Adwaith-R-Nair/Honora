@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Compiles the contract, lints it (solhint), and runs the Hardhat/Mocha suite.
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx hardhat compile
+      - run: npm test
+
+  # Needs the compiled contract artifact (contract.service.ts reads it at import
+  # time, and the test suite's own global-setup deploys from it) — compiles
+  # independently rather than depending on the `contracts` job, since jobs run
+  # on separate VMs and that's simpler than passing artifacts between them.
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - name: Install root deps (needed for hardhat compile)
+        run: npm ci
+      - run: npx hardhat compile
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+      - name: Typecheck
+        working-directory: backend
+        run: npm run build
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+      - name: Test
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Honora--Frontend/package-lock.json
+      - working-directory: Honora--Frontend
+        run: npm ci
+      - working-directory: Honora--Frontend
+        run: npm run lint
+      - working-directory: Honora--Frontend
+        run: npm run build
+
+  # No external services needed: preprocessing.py tests build DOCX/PDF fixtures
+  # in-memory, and search.py tests stub out embeddings/vector_store in
+  # sys.modules — so this never touches torch, Qdrant, or the network.
+  ai-layer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ailayer-querying/requirements-dev.txt
+      - working-directory: ailayer-querying
+        run: pip install -r requirements-dev.txt
+      - working-directory: ailayer-querying
+        run: ruff check .
+      - working-directory: ailayer-querying
+        run: pytest
