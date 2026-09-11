@@ -228,9 +228,14 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>` heade
   "email": "john@police.gov",
   "password": "yourpassword",
   "role": "Police",
+  "department": "narcotics",
   "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 }
 ```
+> `walletAddress` must already hold the claimed `role` on-chain (assigned via `assignRole`) —
+> registration verifies this and rejects any mismatch. `department` is required for Police/Forensic
+> (scopes their AI search results to that department) and optional for Lawyer/Judge (unset means
+> unrestricted search — matches their cross-department oversight role).
 
 #### Evidence
 | Method | Endpoint | Role | Description |

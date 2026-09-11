@@ -4,10 +4,12 @@ import mongoose from "mongoose";
 import { ethers } from "ethers";
 import app from "../src/app.js";
 import { connectDB } from "../src/config/db.js";
-import { POLICE_KEY, FORENSIC_KEY } from "./setup/global-setup.js";
+import { POLICE_KEY, FORENSIC_KEY, LAWYER_KEY, JUDGE_KEY } from "./setup/global-setup.js";
 
 const policeWallet = new ethers.Wallet(POLICE_KEY).address;
 const forensicWallet = new ethers.Wallet(FORENSIC_KEY).address;
+const lawyerWallet = new ethers.Wallet(LAWYER_KEY).address;
+const judgeWallet = new ethers.Wallet(JUDGE_KEY).address;
 
 beforeAll(async () => {
   await connectDB();
@@ -24,6 +26,7 @@ describe("POST /api/auth/register", () => {
       email: "police-ok@test.local",
       password: "password123",
       role: "Police",
+      department: "narcotics",
       walletAddress: policeWallet,
     });
 
@@ -31,6 +34,7 @@ describe("POST /api/auth/register", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.token).toBeTruthy();
     expect(res.body.data.user.role).toBe("Police");
+    expect(res.body.data.user.department).toBe("narcotics");
   });
 
   // Regression test for the fix in auth.service.ts: role used to be a free-text
@@ -60,6 +64,7 @@ describe("POST /api/auth/register", () => {
       email: "nobody@test.local",
       password: "password123",
       role: "Police",
+      department: "narcotics",
       walletAddress: unassignedWallet,
     });
 
@@ -73,6 +78,7 @@ describe("POST /api/auth/register", () => {
       email: "malformed@test.local",
       password: "password123",
       role: "Police",
+      department: "narcotics",
       walletAddress: "not-a-wallet-address",
     });
 
@@ -86,6 +92,7 @@ describe("POST /api/auth/register", () => {
       email: "police-ok@test.local", // already registered above
       password: "password123",
       role: "Forensic",
+      department: "narcotics",
       walletAddress: forensicWallet,
     });
 
@@ -98,6 +105,7 @@ describe("POST /api/auth/register", () => {
       email: "someone-else@test.local",
       password: "password123",
       role: "Police",
+      department: "narcotics",
       walletAddress: policeWallet, // already registered above
     });
 
@@ -123,6 +131,58 @@ describe("POST /api/auth/register", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it("rejects Police registration with no department", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      name: "No Department",
+      email: "no-department-police@test.local",
+      password: "password123",
+      role: "Police",
+      walletAddress: policeWallet,
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/department is required/i);
+  });
+
+  it("rejects Forensic registration with no department", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      name: "No Department",
+      email: "no-department-forensic@test.local",
+      password: "password123",
+      role: "Forensic",
+      walletAddress: forensicWallet,
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/department is required/i);
+  });
+
+  it("allows Lawyer registration with no department (optional for oversight roles)", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      name: "Adv. Test",
+      email: "lawyer-no-department@test.local",
+      password: "password123",
+      role: "Lawyer",
+      walletAddress: lawyerWallet,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.user.department).toBeFalsy();
+  });
+
+  it("allows Judge registration with no department (optional for oversight roles)", async () => {
+    const res = await request(app).post("/api/auth/register").send({
+      name: "Justice Test",
+      email: "judge-no-department@test.local",
+      password: "password123",
+      role: "Judge",
+      walletAddress: judgeWallet,
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.user.department).toBeFalsy();
   });
 });
 

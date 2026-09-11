@@ -14,11 +14,13 @@ import {
 async function registerAndLogin(role: string, key: string, emailPrefix: string) {
   const walletAddress = new ethers.Wallet(key).address;
   const email = `${emailPrefix}@rbac.test.local`;
+  const departmentRequired = role === "Police" || role === "Forensic";
   const register = await request(app).post("/api/auth/register").send({
     name: `${role} Tester`,
     email,
     password: "password123",
     role,
+    ...(departmentRequired ? { department: "narcotics" } : {}),
     walletAddress,
   });
   if (register.status !== 201) {

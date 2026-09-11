@@ -39,6 +39,7 @@ beforeAll(async () => {
     email: "evidence-police@test.local",
     password: "password123",
     role: "Police",
+    department: "narcotics",
     walletAddress: policeWallet,
   });
   if (register.status !== 201) {

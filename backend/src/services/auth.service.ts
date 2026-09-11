@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { ethers } from "ethers";
-import { User, type UserRole } from "../models/user.model.js";
+import { User, DEPARTMENT_REQUIRED_ROLES, type UserRole } from "../models/user.model.js";
 import { ENV } from "../config/env.js";
 import { getOnChainRole } from "./contract.service.js";
 
@@ -11,6 +11,7 @@ export interface RegisterPayload {
   email: string;
   password: string;
   role: UserRole;
+  department?: string;
   walletAddress: string;
 }
 
@@ -23,12 +24,17 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: UserRole;
+  department?: string;
   walletAddress: string;
 }
 
 // ── Register ──────────────────────────────────────────────────────────────────
 export async function registerUser(payload: RegisterPayload) {
-  const { name, email, password, role, walletAddress } = payload;
+  const { name, email, password, role, department, walletAddress } = payload;
+
+  if (DEPARTMENT_REQUIRED_ROLES.includes(role) && !department?.trim()) {
+    throw new Error(`Department is required for the ${role} role`);
+  }
 
   // Check if email already exists
   const existingEmail = await User.findOne({ email });
@@ -71,6 +77,7 @@ export async function registerUser(payload: RegisterPayload) {
     email,
     passwordHash,
     role,
+    department: department?.trim() || undefined,
     walletAddress: walletAddress.toLowerCase(),
   });
 
@@ -79,6 +86,7 @@ export async function registerUser(payload: RegisterPayload) {
     userId: user._id.toString(),
     email: user.email,
     role: user.role,
+    department: user.department,
     walletAddress: user.walletAddress,
   });
 
@@ -89,6 +97,7 @@ export async function registerUser(payload: RegisterPayload) {
       name: user.name,
       email: user.email,
       role: user.role,
+      department: user.department,
       walletAddress: user.walletAddress,
     },
   };
@@ -115,6 +124,7 @@ export async function loginUser(payload: LoginPayload) {
     userId: user._id.toString(),
     email: user.email,
     role: user.role,
+    department: user.department,
     walletAddress: user.walletAddress,
   });
 
@@ -125,6 +135,7 @@ export async function loginUser(payload: LoginPayload) {
       name: user.name,
       email: user.email,
       role: user.role,
+      department: user.department,
       walletAddress: user.walletAddress,
     },
   };

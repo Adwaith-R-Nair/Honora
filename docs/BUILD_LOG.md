@@ -57,9 +57,14 @@ Planned scope (to be broken into individual commits before work starts):
 - [x] GitHub secret scanning + push protection + Dependabot (repo settings, not a commit)
 - [x] Hardhat contract test suite (Mocha/Chai)
 - [x] Backend integration tests (Vitest + supertest + mongodb-memory-server + disposable Hardhat node)
-- [ ] AI layer unit tests (pytest, `preprocessing.py` extraction/chunking) — **also fix
-      `TECHNICAL_AND_SECURITY_AUDIT.md` Finding #2** (AI search's RBAC filter is dead code) as
-      part of this commit, deferred here deliberately
+- Fixing Finding #2 (AI search's RBAC filter is dead code) turned out to need real per-user
+  department data, which didn't exist — expanded into 3 commits instead of 1:
+  - [x] 3a. Add `department` to User model, registration validation, and JWT (Police/Forensic
+        required, Lawyer/Judge optional)
+  - [ ] 3b. AI layer pytest suite (`preprocessing.py`) + implement real department-scoped
+        `_build_rbac_filter()` in `search.py` (Finding #2, properly closed — needs 3a's JWT claim
+        to exist first)
+  - [ ] 3c. Frontend: collect `department` in Police/Forensic signup UI
 - [ ] GitHub Actions CI (compile, typecheck, lint — ESLint/solhint/ruff, run all test suites, build frontend)
 - [ ] Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node
 
@@ -79,6 +84,56 @@ favor of `network.create()`/`getOrCreate()` — left as-is for consistency with 
 non-blocking, candidate cleanup for later.
 Follow-ups spawned: none blocking; the `network.connect()` deprecation is worth revisiting
 project-wide at some point but doesn't fail anything today.
+
+### 2026-09-11 — db39152 — fix: enforce on-chain role verification at registration, add backend integration tests
+Phase: 8 (commit 2 of planned scope)
+What changed: Triggered by a full-stack audit requested ahead of continuing Phase 8 — see
+`TECHNICAL_AND_SECURITY_AUDIT.md`. Found and fixed a CRITICAL vulnerability (Finding #1): `role`
+at `/api/auth/register` was entirely self-declared with zero verification, letting anyone
+register as any role (including Judge) and, as Police, have a fabricated file actually written
+on-chain. Root cause: `contract.service.ts` already exported `getOnChainRole()` but nothing ever
+called it — `auth.service.ts`'s own doc comment claimed the wallet-role check existed; it never
+did. Fix: `registerUser()` now validates the wallet address format (`ethers.isAddress`) and
+verifies the wallet's actual on-chain role matches the claimed role before allowing registration;
+`auth.controller.ts` maps the new rejection to 403. Verified live against a real running backend:
+both original exploit payloads now correctly rejected, legitimate registration unaffected.
+Added `backend/test/` — 31 Vitest + supertest integration tests against a disposable Hardhat node
++ in-memory MongoDB (spun up fresh per test run, torn down after): `auth.test.ts` (incl. a
+permanent regression test for the fix above), `rbac.test.ts` (role-middleware enforcement across
+every protected route), `evidence.test.ts` (upload happy path + duplicate-hash rejection, Pinata
+mocked). `backend/src/app.ts` refactored so tests can import the Express app directly without
+triggering a real DB connection/listen (bootstrap now guarded to only run when the file is
+executed directly, not imported).
+Gotchas: Hardhat's automine + rapid back-to-back transactions from the same signer raced on
+nonce (`ethers` v6's provider briefly caches pending-nonce lookups) — fixed with explicit manual
+nonce tracking in the test's global setup, and a short settling delay between sequential
+on-chain-writing test requests. A test file's own `ethers.Wallet.createRandom()` at module scope
+is NOT safe to share with Vitest's `globalSetup` — `globalSetup` and each test file's `import`
+run in separate module registries/processes, so a random value differs between them; must use
+static string literals for anything both sides need to agree on. Also: `npx hardhat node`
+spawned via `npx` leaves an orphaned node process if only the wrapper PID is killed — fixed by
+spawning the hardhat binary directly with `detached: true` and killing the whole process group.
+Follow-ups spawned: Finding #2 (AI search's RBAC filter is dead code in `search.py`) explicitly
+deferred to the Phase 8 AI-layer test commit (next), not fixed here — flagged in that checklist
+item above.
+
+### 2026-09-11 — feat: add department to User model, registration, and JWT (commit 3a)
+Phase: 8 (commit 3a of planned scope)
+What changed: While designing the Finding #2 fix, found the commented-out `_build_rbac_filter()`
+in `search.py` checked JWT claims (`department`, `allowed_case_ids`) that never existed on any
+real token — `auth.service.ts`'s JWTPayload never carried them, and User had no department field
+at all. Decided (with Adwaith) to build the real feature rather than just deleting dead code:
+`User` schema gains `department` (conditionally required via `DEPARTMENT_REQUIRED_ROLES` —
+Police/Forensic must provide one, Lawyer/Judge don't since they're cross-department oversight
+roles). `auth.service.ts`/`auth.controller.ts` validate and thread it through registration, login,
+`/api/auth/me`, and the JWT payload. `README.md`'s register-body example updated to match.
+Extended `backend/test/auth.test.ts` with 4 new tests (Police/Forensic require it, Lawyer/Judge
+don't); updated all existing Police/Forensic test fixtures across `auth.test.ts`/`evidence.test.ts`/
+`rbac.test.ts` to supply one. 35/35 tests passing, stable across repeated runs.
+Gotchas: none new beyond commit 2's — the existing test/global-setup infrastructure needed no
+changes, just new field values threaded through.
+Follow-ups spawned: 3b (AI layer — implement the actual department-scoped filter using this new
+claim, pytest suite) and 3c (frontend signup form needs a department field) are next.
 
 ---
 

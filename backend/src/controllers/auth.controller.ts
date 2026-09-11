@@ -1,12 +1,14 @@
 import type { Request, Response } from "express";
 import { registerUser, loginUser } from "../services/auth.service.js";
-import { User } from "../models/user.model.js";
+import { User, DEPARTMENT_REQUIRED_ROLES } from "../models/user.model.js";
 
 /**
  * POST /api/auth/register
  *
  * Registers a new user in MongoDB.
  * The wallet address provided must match the on-chain role assignment.
+ * `department` is required for Police/Forensic (scopes their AI search
+ * results), optional for Lawyer/Judge (unset = unrestricted search).
  *
  * Request body:
  * {
@@ -14,12 +16,13 @@ import { User } from "../models/user.model.js";
  *   "email": "john@police.gov",
  *   "password": "securepassword",
  *   "role": "Police",
+ *   "department": "narcotics",
  *   "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
  * }
  */
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { name, email, password, role, walletAddress } = req.body;
+    const { name, email, password, role, department, walletAddress } = req.body;
 
     // ── Input validation ──────────────────────────────────────────────────────
     if (!name || !email || !password || !role || !walletAddress) {
@@ -38,6 +41,14 @@ export async function register(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    if (DEPARTMENT_REQUIRED_ROLES.includes(role) && !department?.trim()) {
+      res.status(400).json({
+        success: false,
+        error: `Department is required for the ${role} role`,
+      });
+      return;
+    }
+
     if (password.length < 6) {
       res.status(400).json({
         success: false,
@@ -46,7 +57,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const result = await registerUser({ name, email, password, role, walletAddress });
+    const result = await registerUser({ name, email, password, role, department, walletAddress });
 
     res.status(201).json({
       success: true,
@@ -123,6 +134,7 @@ export async function getMe(req: Request, res: Response): Promise<void> {
         name: user.name,
         email: user.email,
         role: user.role,
+        department: user.department,
         walletAddress: user.walletAddress,
       },
     });
