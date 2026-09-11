@@ -45,38 +45,30 @@ def _metadata_score(payload: dict[str, Any], filters: dict[str, Any]) -> float:
 
 def _build_rbac_filter(rbac: dict[str, Any]) -> qmodels.Filter | None:
     """
-    Build a Qdrant filter from the JWT RBAC payload.
-    Expected keys (all optional):
-      - allowed_case_ids: list[str]
-      - role: str  ("admin" bypasses all filters)
-      - department: str
+    Build a Qdrant filter from the JWT RBAC payload, scoping results to the
+    caller's department when they have one.
+
+    `department` is required at registration for Police/Forensic accounts
+    (see backend/src/models/user.model.ts's DEPARTMENT_REQUIRED_ROLES) and
+    optional for Lawyer/Judge — those are cross-department oversight roles,
+    so an absent department intentionally means unrestricted search, not a
+    bug. `allowed_case_ids` is not implemented: no per-user case-assignment
+    feature exists in the current data model (nothing ever populates that
+    JWT claim), so a filter on it would silently do nothing — not built
+    until that feature actually exists.
     """
-    role = rbac.get("role", "")
-    # if role == "admin":
-    #     return None  # full access
+    department = rbac.get("department")
+    if not department:
+        return None
 
-    # conditions: list[qmodels.Condition] = []
-
-    # allowed_cases = rbac.get("allowed_case_ids")
-    # if allowed_cases:
-    #     conditions.append(
-    #         qmodels.FieldCondition(
-    #             key="caseId",
-    #             match=qmodels.MatchAny(any=allowed_cases),
-    #         )
-    #     )
-
-    # department = rbac.get("department")
-    # if department:
-    #     conditions.append(
-    #         qmodels.FieldCondition(
-    #             key="department",
-    #             match=qmodels.MatchValue(value=department),
-    #         )
-    #     )
-
-    # return qmodels.Filter(must=conditions) if conditions else None
-    return None
+    return qmodels.Filter(
+        must=[
+            qmodels.FieldCondition(
+                key="department",
+                match=qmodels.MatchValue(value=department),
+            )
+        ]
+    )
 
 def semantic_search(
     query: str,

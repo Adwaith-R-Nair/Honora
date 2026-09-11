@@ -61,7 +61,7 @@ Planned scope (to be broken into individual commits before work starts):
   department data, which didn't exist — expanded into 3 commits instead of 1:
   - [x] 3a. Add `department` to User model, registration validation, and JWT (Police/Forensic
         required, Lawyer/Judge optional)
-  - [ ] 3b. AI layer pytest suite (`preprocessing.py`) + implement real department-scoped
+  - [x] 3b. AI layer pytest suite (`preprocessing.py`) + implement real department-scoped
         `_build_rbac_filter()` in `search.py` (Finding #2, properly closed — needs 3a's JWT claim
         to exist first)
   - [ ] 3c. Frontend: collect `department` in Police/Forensic signup UI
@@ -117,7 +117,7 @@ Follow-ups spawned: Finding #2 (AI search's RBAC filter is dead code in `search.
 deferred to the Phase 8 AI-layer test commit (next), not fixed here — flagged in that checklist
 item above.
 
-### 2026-09-11 — feat: add department to User model, registration, and JWT (commit 3a)
+### 2026-09-11 — 7dd62b9 — feat: add department to User model, registration, and JWT (commit 3a)
 Phase: 8 (commit 3a of planned scope)
 What changed: While designing the Finding #2 fix, found the commented-out `_build_rbac_filter()`
 in `search.py` checked JWT claims (`department`, `allowed_case_ids`) that never existed on any
@@ -134,6 +134,34 @@ Gotchas: none new beyond commit 2's — the existing test/global-setup infrastru
 changes, just new field values threaded through.
 Follow-ups spawned: 3b (AI layer — implement the actual department-scoped filter using this new
 claim, pytest suite) and 3c (frontend signup form needs a department field) are next.
+
+### 2026-09-11 — test: add AI layer pytest suite, implement department-scoped search (commit 3b)
+Phase: 8 (commit 3b of planned scope)
+What changed: `search.py`'s `_build_rbac_filter()` now actually scopes Qdrant results by
+`department` when the caller's JWT carries one (Finding #2, closed — the claim exists for real
+now, thanks to 3a). `allowed_case_ids` deliberately left unimplemented — no per-user
+case-assignment feature exists anywhere in the data model, so filtering on it would still be
+inert; noted in a comment so it doesn't look like an oversight. Added
+`ailayer-querying/test_preprocessing.py` (21 tests: `clean_text`, `_cell`, `_serialize_table`,
+`chunk_text`, `_is_docx`, and full DOCX/PDF extraction round-trips built entirely in-memory — no
+fixture files on disk) and `test_search.py` (15 tests: `_build_rbac_filter`, `_recency_score`,
+`_metadata_score`, and `semantic_search()`'s dedup/ranking/threshold behavior, including that the
+department filter actually reaches the vector store call). 36/36 passing.
+Also bumped `PyMuPDF` from `1.24.5` to `1.28.2` in `requirements.txt` — the old pin has zero wheel
+support for Python 3.14 (confirmed in the audit) and failed to build from source; 1.28.2 installs
+cleanly and the extraction APIs this project uses (`find_tables`, `get_text`, `Rect`) are unchanged
+across that range, confirmed by every extraction test passing. Added `requirements-dev.txt`
+(`-r requirements.txt` + `pytest`) — separate from the runtime `requirements.txt` so the eventual
+Docker image (Phase 8, still to come) doesn't need test tooling baked in.
+Gotchas: `embeddings.py` (`sentence-transformers`/torch) and `vector_store.py` (live Qdrant) are
+both imported at module load time by `search.py` — pulling either in for real would need torch
+installed (779MB, and this sandbox's Python 3.14 has no wheel for the old pinned torch version
+either). Stubbed both out via `sys.modules["embeddings"] = ...` / `sys.modules["vector_store"] =
+...` *before* `import search`, so the tests never touch either heavy dependency — this sandbox
+still has no torch installed at all and the full suite runs in under a second.
+Follow-ups spawned: 3c (frontend signup form needs a department field, otherwise Police/Forensic
+signup will now fail against the real backend) is next and is not optional — it's the UI catching
+up to a backend contract change already live.
 
 ---
 
