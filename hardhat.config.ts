@@ -1,5 +1,5 @@
 import { defineConfig } from "hardhat/config";
-import hardhatEthers from "@nomicfoundation/hardhat-ethers";
+import hardhatToolboxMochaEthers from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -8,7 +8,7 @@ const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL ?? "";
 const SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY;
 
 export default defineConfig({
-  plugins: [hardhatEthers],
+  plugins: [hardhatToolboxMochaEthers],
   solidity: "0.8.24",
   networks: {
     localhost: {
