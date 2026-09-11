@@ -5,7 +5,7 @@ import { CloseIcon, PlusIcon } from "../../assets/icons/Icons.jsx";
 const FORMATS = ["Legal Brief", "Affidavit", "Motion", "Petition", "Evidence Document", "Other"];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
-export default function LawyerUploadModal({ caseId, onClose, onUpload, lawyerName }) {
+export default function LawyerUploadModal({ caseId, onClose, onUpload, lawyerName: _lawyerName }) {
   const [form, setForm] = useState({
     title: "",
     description: "",

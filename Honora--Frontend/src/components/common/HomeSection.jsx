@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router-dom";
-import { ChainLinkIcon } from "../../assets/icons/Icons";
 
 const addRipple = (e, cb) => {
   const el = e.currentTarget;

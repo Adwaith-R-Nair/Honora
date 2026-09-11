@@ -5,7 +5,7 @@ import ForensicCaseCard from "./ForensicCaseCard.jsx";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function ForensicDashboard({ onViewCase, onLogout }) {
+export default function ForensicDashboard({ onViewCase: _onViewCase, onLogout }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");

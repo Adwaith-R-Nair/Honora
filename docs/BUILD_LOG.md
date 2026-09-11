@@ -65,7 +65,8 @@ Planned scope (to be broken into individual commits before work starts):
         `_build_rbac_filter()` in `search.py` (Finding #2, properly closed — needs 3a's JWT claim
         to exist first)
   - [x] 3c. Frontend: collect `department` in Police/Forensic signup UI
-- [ ] GitHub Actions CI (compile, typecheck, lint — ESLint/solhint/ruff, run all test suites, build frontend)
+  - [x] 4. Linting (ESLint × 2, solhint, ruff) + fix violations
+  - [ ] 5. GitHub Actions CI pipeline (compile, typecheck, lint, run all test suites, build frontend)
 - [ ] Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node
 
 ### 2026-09-11 — c9cb304 — test: add Hardhat contract test suite for EvidenceRegistry
@@ -163,7 +164,7 @@ Follow-ups spawned: 3c (frontend signup form needs a department field, otherwise
 signup will now fail against the real backend) is next and is not optional — it's the UI catching
 up to a backend contract change already live.
 
-### 2026-09-11 — feat: collect department in Police/Forensic signup UI (commit 3c)
+### 2026-09-11 — 63be042 — feat: collect department in Police/Forensic signup UI (commit 3c)
 Phase: 8 (commit 3c of planned scope — closes out the Finding #2 department feature)
 What changed: `LoginModal.jsx` now shows a "Department" text input (only during signup, only for
 Police/Forensic — mirrors `DEPARTMENT_REQUIRED_ROLES` from the backend) between Wallet Address
@@ -183,6 +184,54 @@ the role-selection page would actually render; the in-app Logout button click di
 reliably in this test sequence, worth a look if it recurs for a real user.
 Follow-ups spawned: none blocking. This closes out Finding #2 and the department feature (3a+3b+3c)
 entirely. Next up: Phase 8 commit 4 — GitHub Actions CI.
+
+### 2026-09-11 — chore: add linting (ESLint, solhint, ruff) and fix violations (commit 4)
+Phase: 8 (commit 4 of planned scope)
+What changed: zero linting infrastructure existed anywhere in the project before this. Added:
+- `backend/eslint.config.js` — ESLint 10 + typescript-eslint, flat config. One real finding:
+  `@typescript-eslint/no-namespace` flagged `declare global { namespace Express }` in
+  `auth.middleware.ts` (the standard, required TS pattern for augmenting Express's `Request`
+  type) — configured `allowDeclarations: true` rather than rewriting correct code.
+- `Honora--Frontend/eslint.config.js` — ESLint 9.x (not 10 — `eslint-plugin-react@7.37.5`'s peer
+  range caps at `^9.7`; forcing 10 would risk real incompatibility, not just a version-string
+  mismatch) + `eslint-plugin-react`/`react-hooks`/`react-refresh`. Used stable
+  `eslint-plugin-react-hooks@5.2.0`, not the v7 canary — v7 bundles new React-Compiler-aligned
+  rules (`immutability`, `set-state-in-effect`) that flagged a common, runtime-safe pattern
+  (fetch function defined after the `useEffect` that calls it) as a hard error across 8 nearly
+  identical dashboard/detail components; this project doesn't use React Compiler, so pulling in
+  compiler-era strictness would mean a large speculative refactor with no corresponding runtime
+  benefit. Fixed the real findings: 6 unused imports/vars, 1 unescaped JSX apostrophe. Left 7
+  `exhaustive-deps` warnings as warnings (not errors, exit 0) — fixing properly means wrapping
+  several fetch functions in `useCallback` across files, real but not-blocking follow-up work.
+- `.solhint.json` — `solhint:recommended`. 63 warnings surfaced, 0 errors; ~90% were missing
+  NatSpec (`@notice`/`@param`) documentation — a legitimate but disproportionately large
+  documentation task for a linting commit, left as tracked warnings rather than authoring full
+  NatSpec for 11 functions + 6 events under this commit's scope. Applied the cheap/safe wins:
+  `++evidenceCount`/`++supportingDocCount` (gas), `calldata` for `isFileHashRegistered`'s param
+  (gas), indexed `RoleRevoked.timestamp` and `IntegrityVerified.passed` (within the 3-indexed-arg
+  limit; verified no code anywhere parses these events positionally). All 29 contract tests still
+  pass after.
+- `ailayer-querying/ruff.toml` — extended selection (`I`, `B`, `PIE`, `RUF`) beyond ruff's bare
+  defaults. Disabled `BLE001` (blind-except) project-wide with a documented rationale: every one
+  of the 8 sites found is a deliberate resilience pattern matching `ARCHITECTURE.md`'s documented
+  fire-and-forget design (WebSocket broadcast/send, Qdrant keep-alive ping, cross-case linkage
+  check explicitly commented "non-critical", PDF table-detection fallback, batch-reindex per-file
+  resilience) — not scattered bugs, so noqa-per-site would just be repetitive noise. Allowlisted
+  `fastapi.Depends`/`fastapi.Query` for `B008` (FastAPI's own required DI pattern, not a mutable-
+  default-argument bug). Disabled `RUF001-003` (ambiguous-unicode) since en/em dashes are this
+  project's consistent, deliberate comment style, not typos. Fixed real findings: unused imports,
+  f-strings without placeholders, an unnecessary dict spread in `vector_store.py`, a missing
+  `raise ... from exc` in `main.py`'s JWT error handling, and `zip(..., strict=False)` (explicit,
+  not `True` — table rows can legitimately have fewer/more cells than headers in messy real-world
+  documents; `strict=True` would make extraction less robust, the opposite of what's wanted).
+All three test suites re-verified passing after every fix (29 contract + 35 backend + 36 AI
+layer = 100/100).
+Gotchas: none beyond what's captured above — the theme this commit surfaced repeatedly was
+"don't let a linter's generic opinion override this codebase's actual, documented architectural
+choices (resilience-over-strictness, FastAPI's DI pattern, TS's namespace-augmentation idiom)."
+Follow-ups spawned: full NatSpec documentation pass on the contract (worth doing, not urgent);
+wrapping the 7 flagged fetch functions in `useCallback` to close the `exhaustive-deps` warnings
+cleanly. Neither blocks anything. Next: commit 5, the GitHub Actions CI pipeline itself.
 
 ---
 

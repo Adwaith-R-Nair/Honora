@@ -9,7 +9,6 @@ pipeline that don't require sentence-transformers/torch (never imported here).
 import io
 
 import fitz
-import pytest
 from docx import Document
 
 from preprocessing import (
@@ -20,7 +19,6 @@ from preprocessing import (
     clean_text,
     extract_full,
 )
-
 
 # ── clean_text ────────────────────────────────────────────────────────────
 

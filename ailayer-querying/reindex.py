@@ -174,7 +174,7 @@ def main() -> None:
     print(f"  ✓ Logged in as {email}")
 
     # Step 2 — Clear Qdrant
-    print(f"\n[2/4] Clearing Qdrant collection...")
+    print("\n[2/4] Clearing Qdrant collection...")
     clear_and_recreate()
 
     # Step 3 — Fetch all evidence
@@ -187,7 +187,7 @@ def main() -> None:
         return
 
     # Step 4 — Index
-    print(f"\n[4/4] Indexing evidence + supporting documents...\n")
+    print("\n[4/4] Indexing evidence + supporting documents...\n")
 
     ev_indexed   = 0
     ev_skipped   = 0
@@ -229,7 +229,7 @@ def main() -> None:
             total_chunks += n
             ev_indexed += 1
         else:
-            print(f"         ⚠ Skipped (unsupported type or empty text)")
+            print("         ⚠ Skipped (unsupported type or empty text)")
             ev_skipped += 1
 
         # Supporting docs

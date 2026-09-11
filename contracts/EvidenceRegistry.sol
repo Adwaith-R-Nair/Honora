@@ -99,13 +99,13 @@ contract EvidenceRegistry {
 
     event RoleRevoked(
         address indexed account,
-        uint256 timestamp
+        uint256 indexed timestamp
     );
 
     event IntegrityVerified(
         uint256 indexed evidenceId,
         address indexed verifiedBy,
-        bool passed,
+        bool indexed passed,
         uint256 timestamp
     );
 
@@ -205,7 +205,7 @@ contract EvidenceRegistry {
         if (bytes(_fileHash).length == 0) revert EmptyField("fileHash");
         if (fileHashExists[_fileHash]) revert DuplicateFileHash(_fileHash);
 
-        evidenceCount++;
+        ++evidenceCount;
         uint256 newEvidenceId = evidenceCount;
 
         evidences[newEvidenceId] = Evidence({
@@ -248,7 +248,7 @@ contract EvidenceRegistry {
         if (bytes(_docType).length == 0) revert EmptyField("docType");
         if (fileHashExists[_fileHash]) revert DuplicateFileHash(_fileHash);
 
-        supportingDocCount++;
+        ++supportingDocCount;
         uint256 newDocId = supportingDocCount;
 
         supportingDocs[_evidenceId].push(SupportingDoc({
@@ -337,7 +337,7 @@ contract EvidenceRegistry {
     }
 
     function isFileHashRegistered(
-        string memory _fileHash
+        string calldata _fileHash
     ) external view returns (bool) {
         return fileHashExists[_fileHash];
     }

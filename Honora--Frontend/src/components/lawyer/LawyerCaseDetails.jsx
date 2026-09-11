@@ -3,7 +3,6 @@ import { getCaseById, getLawyerDocuments, getCases } from "../../services/api.js
 import EvidenceSection from "../common/EvidenceSection.jsx";
 import LawyerUploadModal from "./LawyerUploadModal.jsx";
 import { useState, useEffect } from "react";
-import { ArrowLeftIcon, PlusIcon } from "../../assets/icons/Icons.jsx";
 
 const getFileFormat = (filename) => {
   const ext = filename?.split('.').pop()?.toLowerCase();

@@ -1,6 +1,4 @@
 from sentence_transformers import SentenceTransformer
-from typing import List
-import numpy as np
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 VECTOR_SIZE = 384
@@ -15,13 +13,13 @@ def get_model() -> SentenceTransformer:
     return _model
 
 
-def embed_text(text: str) -> List[float]:
+def embed_text(text: str) -> list[float]:
     model = get_model()
     vector = model.encode(text, convert_to_numpy=True)
     return vector.tolist()
 
 
-def embed_batch(texts: List[str]) -> List[List[float]]:
+def embed_batch(texts: list[str]) -> list[list[float]]:
     model = get_model()
     vectors = model.encode(texts, convert_to_numpy=True, batch_size=32)
     return vectors.tolist()

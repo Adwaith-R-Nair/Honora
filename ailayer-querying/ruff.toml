@@ -1,0 +1,26 @@
+target-version = "py310"
+line-length = 100
+exclude = ["venv", ".venv"]
+
+[lint]
+extend-select = ["I", "B", "PIE", "RUF"]
+ignore = [
+  # This codebase's AI layer deliberately swallows exceptions in non-critical
+  # paths (WebSocket broadcast, Qdrant keep-alive ping, cross-case linkage
+  # check explicitly commented "non-critical", PDF table-detection fallback,
+  # batch-reindex per-file resilience) — matches ARCHITECTURE.md's documented
+  # fire-and-forget/resilience-over-strictness design, not a scattered bug.
+  "BLE001",
+  # En/em dashes are a deliberate, consistent stylistic convention across this
+  # whole project's docs and comments (README, docs/, every module docstring)
+  # — not typos to "fix" to a hyphen.
+  "RUF001",
+  "RUF002",
+  "RUF003",
+]
+
+[lint.flake8-bugbear]
+# FastAPI's own required dependency-injection pattern: `Depends(...)` as a
+# default argument is evaluated specially by FastAPI at request time, not a
+# normal mutable-default-argument bug.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]

@@ -4,7 +4,7 @@ import { getCaseById, getForensicReports, getCases } from "../../services/api.js
 import { GoldenDivider } from "../common/Shared.jsx";
 import EvidenceSection from "../common/EvidenceSection.jsx";
 import ForensicReportUploadModal from "./ForensicReportUploadModal.jsx";
-import { ArrowLeftIcon, PlusIcon } from "../../assets/icons/Icons.jsx";
+import { PlusIcon } from "../../assets/icons/Icons.jsx";
 
 const getFileFormat = (filename) => {
   const ext = filename?.split('.').pop()?.toLowerCase();

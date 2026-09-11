@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "lint": "solhint 'contracts/**/*.sol'"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +18,7 @@
     "@types/node": "^22.19.11",
     "ethers": "^6.16.0",
     "hardhat": "^3.1.10",
+    "solhint": "^6.2.4",
     "typescript": "~5.8.0"
   },
   "type": "module",

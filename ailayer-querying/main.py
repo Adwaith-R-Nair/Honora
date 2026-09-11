@@ -115,7 +115,7 @@ def decode_token(credentials: HTTPAuthorizationCredentials) -> dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {exc}",
-        )
+        ) from exc
 
 
 def get_rbac(

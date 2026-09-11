@@ -11,7 +11,9 @@ export default function UploadEvidenceModal({ caseId, onClose, onUpload }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // Progress bar UI exists but nothing wires up progress updates yet — not
+  // part of this cleanup's scope, kept honest rather than silently "fixed".
+  const [uploadProgress, _setUploadProgress] = useState(0);
 
   const handleOverlay = (e) => {
     if (e.target === e.currentTarget) onClose();

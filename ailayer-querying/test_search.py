@@ -22,7 +22,7 @@ _fake_vector_store = types.ModuleType("vector_store")
 _fake_vector_store.search_similar = MagicMock(return_value=[])
 sys.modules["vector_store"] = _fake_vector_store
 
-import search  # noqa: E402  (must import after the sys.modules stubs above)
+import search
 
 
 def _fake_hit(score: float, payload: dict, point_id: str = "id"):

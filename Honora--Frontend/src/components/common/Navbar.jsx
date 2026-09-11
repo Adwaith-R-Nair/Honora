@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "./useAuth";
-import { ChainLinkIcon } from "../../assets/icons/Icons";
 import SearchBar from "./SearchBar";
 
 export default function Navbar() {

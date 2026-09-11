@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import fitz                      # PyMuPDF ≥ 1.23
-from docx import Document        # python-docx
+import fitz  # PyMuPDF ≥ 1.23
+from docx import Document  # python-docx
 
 # ── Legal term normalisations ──────────────────────────────────────────────
 LEGAL_TERM_MAP: dict[str, str] = {
@@ -95,7 +95,9 @@ def _serialize_table(
             continue
         pairs = ", ".join(
             f"{label}={val}"
-            for label, val in zip(col_labels, row)
+            # strict=False: real-world tables can have a row with fewer/more
+            # cells than the header row — truncate to the shorter, don't raise.
+            for label, val in zip(col_labels, row, strict=False)
             if val
         )
         lines.append(f"Row {r_idx + 1}: {pairs}.")
