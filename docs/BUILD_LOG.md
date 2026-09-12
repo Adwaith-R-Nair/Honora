@@ -301,7 +301,7 @@ actually run the AI service and re-index a real document before trusting it.
 CI reconfirmed green after each batch of merges (verified via `gh run view`).
 Follow-ups spawned: the torch/transformers bump, whenever there's a real environment to test it in.
 
-### 2026-09-12 — chore: dockerize backend (commit 6)
+### 2026-09-12 — 589a1de — chore: dockerize backend (commit 6)
 Phase: 8 (commit 6 of planned scope)
 What changed: `backend/Dockerfile` — 3-stage build. Stage 1 compiles the contract (needs root-level
 `contracts/`, `hardhat.config.ts`); stage 2 builds the backend TypeScript; stage 3 is the runtime
@@ -320,6 +320,39 @@ silently fell back to the WASM build — this is normal Hardhat behavior (same f
 sometimes on bare metal too), not a Docker-specific problem, and compile still succeeded correctly.
 Follow-ups spawned: commit 7 (AI service Dockerfile) next, then commit 8 (docker-compose.yml) to
 wire this together with a local Hardhat node.
+
+### 2026-09-12 — chore: dependency hygiene cleanup (unplanned, triggered by GitHub's push warning)
+Phase: 8 (operational cleanup, not part of the original planned commit sequence)
+What changed: pushing commit 6 surfaced GitHub's "134 vulnerabilities (2 critical, 41 high, 72
+moderate, 19 low)" banner — investigated properly rather than dismissing it:
+- Found and removed `Honora--Frontend/src/package.json` + `.../src/package-lock.json` — an exact,
+  stale duplicate of the real `Honora--Frontend/package.json`, dating back to before this session's
+  work, with no `node_modules` and nothing referencing it. Confirmed dead before deleting. This was
+  inflating the alert count by scanning a second, independent (and outdated) dependency tree that
+  nothing actually uses.
+- Found that PR #2 (merged earlier) had only fixed `multer` in the **root** `package.json` — the
+  Dependabot PR title didn't disambiguate, and `backend/`'s own separate `multer` dependency
+  (2.1.1, still vulnerable) was never touched by any PR. Bumped it to `^2.3.0` directly.
+- Ran `npm audit fix` (non-forcing) in root, `backend/`, and `Honora--Frontend/` — cleared
+  everything auto-fixable without breaking changes.
+Verified after every change: 29 contract tests, 35 backend tests, frontend lint (still 0
+errors/7 tracked warnings) and build all still pass.
+**Deliberately left unfixed** (same "don't force a major-version bump without dedicated testing
+time" judgment as torch/transformers):
+- Backend: `esbuild` (transitive via vitest, dev-only) and `qs` (deep transitive) — need `--force`
+- Root: 16 issues deep inside Hardhat's own toolbox dependency tree (`hardhat-ignition`,
+  `hardhat-verify`, etc.) and `serialize-javascript` — dev-tooling only, never exposed at runtime,
+  forcing risks breaking Hardhat itself
+- Frontend: `vite` (transitive via esbuild, dev-only) and `react-router` 6.x→7.x — explicitly
+  flagged as a breaking change by npm, and this app's routing depends on it directly
+- Confirmed via the GitHub API that all pip-ecosystem alerts are exactly torch + transformers
+  (already tracked as PRs #7/#9) — nothing new on that side.
+Gotchas: none. This is exactly the kind of drive-by hygiene pass that's easy to skip when a big
+scary vulnerability count shows up — worth actually reading the list instead of either ignoring it
+or panic-force-fixing everything.
+Follow-ups spawned: none new — same held-back items (torch/transformers major bumps,
+esbuild/qs/serialize-javascript/react-router major bumps) as already tracked. Back to commit 7
+(AI service Dockerfile).
 
 ---
 
