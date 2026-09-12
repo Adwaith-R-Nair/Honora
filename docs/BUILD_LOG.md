@@ -321,7 +321,7 @@ sometimes on bare metal too), not a Docker-specific problem, and compile still s
 Follow-ups spawned: commit 7 (AI service Dockerfile) next, then commit 8 (docker-compose.yml) to
 wire this together with a local Hardhat node.
 
-### 2026-09-12 — chore: dependency hygiene cleanup (unplanned, triggered by GitHub's push warning)
+### 2026-09-12 — 7c5e715 — chore: dependency hygiene cleanup (unplanned, triggered by GitHub's push warning)
 Phase: 8 (operational cleanup, not part of the original planned commit sequence)
 What changed: pushing commit 6 surfaced GitHub's "134 vulnerabilities (2 critical, 41 high, 72
 moderate, 19 low)" banner — investigated properly rather than dismissing it:
@@ -353,6 +353,63 @@ or panic-force-fixing everything.
 Follow-ups spawned: none new — same held-back items (torch/transformers major bumps,
 esbuild/qs/serialize-javascript/react-router major bumps) as already tracked. Back to commit 7
 (AI service Dockerfile).
+
+### 2026-09-12 — chore: dockerize AI service (commit 7)
+Phase: 8 (commit 7 of planned scope)
+What changed: `ailayer-querying/Dockerfile` — 2-stage build on `python:3.12-slim` (glibc, not
+alpine — torch/PyMuPDF ship manylinux wheels needing glibc; alpine's musl would force slow/failing
+from-source builds). Stage 1 installs dependencies; stage 2 is the runtime image. CMD runs
+`uvicorn` directly, not via `main.py`'s own `__main__` block (which hardcodes `reload=True`,
+dev-only). Added `ailayer-querying/.dockerignore` (test files, `venv/`, `.env`, `reindex.py`,
+`ruff.toml` — none of it belongs in the runtime image).
+
+**This took three build attempts to get right, and it's worth recording why — the root cause was
+subtle and cost Adwaith a real "no space left on device" crash on his own machine.** The service
+only ever runs CPU inference on a small MiniLM model, but plain PyPI `torch` bundles full CUDA
+runtime libraries (~700MB+ vs ~190MB CPU-only) that go completely unused here.
+
+- *Attempt 1*: CPU-only torch installed via `--index-url` in one `pip install` call, then a
+  second plain `pip install -r requirements.txt`. Looked fine in an initial build log, but
+  silently reinstalled the full CUDA-bundled torch **on top of** the CPU one — the bare
+  `torch==2.3.1` pin in `requirements.txt` doesn't reliably match an already-installed
+  `2.3.1+cpu`. This is the version that reached Adwaith's machine and crashed with
+  `no space left on device` writing `libtorch_cuda.so` after a 1388s build.
+- *Attempt 2*: Pinned `torch==2.3.1+cpu` exactly for the first install, stripped `torch` out of
+  `requirements.txt` for the second. Still broken: `sentence-transformers` itself declares an
+  *unpinned* `torch>=1.11.0` dependency, and `pip install --prefix=X` resolves each invocation
+  independently — the second command's resolver had no visibility into the first invocation's
+  `--prefix`-installed packages, so it went looking for something satisfying `>=1.11.0` on the
+  default index and pulled in a fresh CUDA-toolkit-dependent torch release (`nvidia-cusolver`,
+  `nvidia-cusparse`, etc. visible in the log). Killed mid-build before it could fill the disk
+  again.
+- *Attempt 3 (the fix, now committed)*: **One single `pip install` call** with
+  `--extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt` — not
+  `--index-url`, which would drop PyPI entirely and break every other dependency. One unified
+  resolution pass that can see both indexes at once means pip's resolver picks the CPU build for
+  *every* place torch is needed — the explicit `requirements.txt` pin and
+  `sentence-transformers`'s transitive `torch>=1.11.0` — instead of treating them as two separate
+  problems across two invocations.
+
+Verified end-to-end this session (build run directly on Adwaith's machine, confirmed to be the
+same machine this session's tools operate on): `docker build --no-cache -f
+ailayer-querying/Dockerfile -t honora-ai-layer:fixed2 ailayer-querying` completed in ~360s total.
+Confirmed zero `nvidia-*` packages installed (`python -c "import pkgutil; ...".` returned `[]`),
+zero actual CUDA `.so` binaries anywhere under `site-packages/torch` (only harmless CUDA-codepath
+`.py`/`.pyc` source files remain, which every torch install ships regardless of build), and
+`torch.__version__` reports `2.3.1+cpu` with `torch.cuda.is_available()` → `False`. Final image
+content size: 464MB (vs. multiple GB for the CUDA-poisoned attempts). Ran the container with
+`--env-file ailayer-querying/.env` against real Qdrant Cloud credentials and hit `GET /health` →
+`200 {"status":"ok","connectedClients":0}`. Test container and temp image tag removed after
+verification; also ran `docker builder prune -f` to reclaim 3.4GB of stale BuildKit cache left
+over from the earlier failed attempts, since that cache was itself eating into the disk headroom
+that caused the original crash.
+Gotchas: `pip install --prefix=X` not seeing a prior separate invocation's installed packages is
+the real lesson here — it's not specific to torch, it'll bite any multi-`pip install`-call
+Dockerfile pattern where a later call has an unpinned transitive dependency on something the
+earlier call already installed. Single resolution pass with all needed indexes is the fix, not
+splitting installs "for clarity."
+Follow-ups spawned: none — this is now fully verified and closed. Commit 8 (`docker-compose.yml`)
+is next.
 
 ---
 

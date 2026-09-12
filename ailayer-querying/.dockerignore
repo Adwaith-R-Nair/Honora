@@ -1,0 +1,12 @@
+.env
+.env.*
+venv
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+test_*.py
+ruff.toml
+requirements-dev.txt
+reindex.py
