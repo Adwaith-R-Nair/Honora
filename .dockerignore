@@ -1,0 +1,30 @@
+# Never send secrets or local env into the build context
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Dependencies (each stage runs its own npm ci)
+node_modules
+**/node_modules
+
+# Build/test output — regenerated inside each image
+dist
+**/dist
+artifacts
+cache
+typechain-types
+coverage
+**/coverage
+**/__pycache__
+**/*.pyc
+**/venv
+**/.venv
+
+# Not needed inside any image
+.git
+.github
+test-data
+graphify-out
+*.md
+docs

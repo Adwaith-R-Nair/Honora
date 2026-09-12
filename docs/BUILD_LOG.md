@@ -68,7 +68,10 @@ Planned scope (to be broken into individual commits before work starts):
   - [x] 3c. Frontend: collect `department` in Police/Forensic signup UI
   - [x] 4. Linting (ESLint × 2, solhint, ruff) + fix violations
   - [x] 5. GitHub Actions CI pipeline (compile, typecheck, lint, run all test suites, build frontend)
-- [ ] Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node
+- Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node — split into:
+  - [x] 6. `backend/Dockerfile`
+  - [ ] 7. `ailayer-querying/Dockerfile`
+  - [ ] 8. `docker-compose.yml`
 
 ### 2026-09-11 — c9cb304 — test: add Hardhat contract test suite for EvidenceRegistry
 Phase: 8 (commit 1 of planned scope)
@@ -266,6 +269,57 @@ Follow-ups spawned: watch the first real push/PR run on GitHub's actual runners 
 backend/frontend/ai-layer jobs behave as expected — the local verification is strong but not
 exhaustive. Phase 8 now has exactly one item left: Dockerize backend + AI service +
 docker-compose.yml.
+
+### 2026-09-12 — 4566b60 — fix: only register Sepolia network config when credentials are present
+Phase: 8 (unplanned hotfix — commit 5's first real GitHub Actions run went red)
+What changed: the first real CI run failed `contracts` and `backend` at `npx hardhat compile` with
+`Error HHE15: config.networks.sepolia.url: Expected a URL`. Root cause: CI has no `.env` (correctly
+— gitignored), so `SEPOLIA_RPC_URL` resolved to `""`, and Hardhat 3's config validator rejects an
+empty-string network URL outright, even for commands that never touch Sepolia at all (compile,
+local-network test). `hardhat.config.ts` now only registers the `sepolia` network entry when a real
+URL is present. Verified by wiping `SEPOLIA_RPC_URL`/`SEPOLIA_PRIVATE_KEY` entirely and running a
+genuinely clean `hardhat compile` + `hardhat test` locally (29/29 passing) before pushing, then
+confirmed all 4 CI jobs green on the next run.
+Gotchas: this also fixes the same failure for anyone cloning the repo fresh with no `.env` at all
+yet — not CI-specific.
+Follow-ups spawned: none.
+
+### 2026-09-12 — Dependabot: merged 8 PRs, held back 2
+Phase: 8 (operational, not a planned commit)
+What changed: reviewed all Dependabot version-update PRs that had accumulated. Merged 6 patch-level
+security-fix bumps (#2 multer, #3 body-parser, #4 qs, #5 undici, #6 pyjwt, #8 python-multipart) —
+all were exactly the `npm audit`-flagged issues from `TECHNICAL_AND_SECURITY_AUDIT.md`'s Finding #6,
+Dependabot just beat me to opening the PRs. Two more appeared afterward (#10 python-dotenv 1.0.1→
+1.2.2, #11 pytest 8.3.3→9.0.3) — tested both against the real AI-layer test suite before merging
+(36/36 passing unchanged), then merged.
+**Deliberately held back:** #7 (torch 2.3.1→2.13.0) and #9 (transformers 4.41.2→5.10.1) — both major
+version jumps. `sentence-transformers==3.0.1` was built against `transformers` 4.x; bumping
+`transformers` independently to 5.x risks breaking embedding generation via API changes, and this
+sandbox can't fully exercise the live embedding pipeline to confirm (Python 3.14 has no wheel for
+either the old *or* very new torch). Treat as its own dedicated task later: bump both together, then
+actually run the AI service and re-index a real document before trusting it.
+CI reconfirmed green after each batch of merges (verified via `gh run view`).
+Follow-ups spawned: the torch/transformers bump, whenever there's a real environment to test it in.
+
+### 2026-09-12 — chore: dockerize backend (commit 6)
+Phase: 8 (commit 6 of planned scope)
+What changed: `backend/Dockerfile` — 3-stage build. Stage 1 compiles the contract (needs root-level
+`contracts/`, `hardhat.config.ts`); stage 2 builds the backend TypeScript; stage 3 is the runtime
+image, combining compiled `dist/` with the contract artifact at `/app/artifacts` — one level above
+`/app/backend`, matching the relative path `contract.service.ts` already resolves
+(`../artifacts/contracts/...`) so nothing in the app code needed to change. Build context is the
+repo root (`docker build -f backend/Dockerfile .`), not `backend/`, specifically so stage 1 can see
+the contract source. Added root `.dockerignore` (secrets, node_modules, build output, docs — none
+of it belongs in any image).
+Verified for real, not just "it builds": ran the actual image against a disposable Mongo container
+and a real Hardhat node (host networking), hit `/health`, registered a real on-chain Police wallet
+successfully, and confirmed the on-chain role-verification fix (commit 2) still rejects an
+unassigned wallet with 403 — all from inside the running container. Everything torn down after.
+Gotchas: `hardhat compile`'s native solc binary download failed inside the Alpine container and
+silently fell back to the WASM build — this is normal Hardhat behavior (same fallback happens
+sometimes on bare metal too), not a Docker-specific problem, and compile still succeeded correctly.
+Follow-ups spawned: commit 7 (AI service Dockerfile) next, then commit 8 (docker-compose.yml) to
+wire this together with a local Hardhat node.
 
 ---
 
