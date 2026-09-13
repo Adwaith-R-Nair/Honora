@@ -20,7 +20,7 @@ contract EvidenceRegistry {
     // State Variables
     // -------------------------------------------------------------------------
 
-    address public owner;
+    address public immutable owner;
     uint256 public evidenceCount;
     uint256 public supportingDocCount;
 
@@ -158,9 +158,9 @@ contract EvidenceRegistry {
         _;
     }
 
-    modifier evidenceExists(uint256 _evidenceId) {
-        if (!evidences[_evidenceId].exists)
-            revert EvidenceNotFound(_evidenceId);
+    modifier evidenceExists(uint256 evidenceId) {
+        if (!evidences[evidenceId].exists)
+            revert EvidenceNotFound(evidenceId);
         _;
     }
 
@@ -176,20 +176,20 @@ contract EvidenceRegistry {
     // Admin Functions — Role Management
     // -------------------------------------------------------------------------
 
-    function assignRole(address _account, Role _role) external onlyOwner {
-        if (_account == address(0)) revert InvalidAddress();
-        userRoles[_account] = _role;
-        emit RoleAssigned(_account, _role, block.timestamp);
+    function assignRole(address account, Role role) external onlyOwner {
+        if (account == address(0)) revert InvalidAddress();
+        userRoles[account] = role;
+        emit RoleAssigned(account, role, block.timestamp);
     }
 
-    function revokeRole(address _account) external onlyOwner {
-        if (_account == address(0)) revert InvalidAddress();
-        userRoles[_account] = Role.None;
-        emit RoleRevoked(_account, block.timestamp);
+    function revokeRole(address account) external onlyOwner {
+        if (account == address(0)) revert InvalidAddress();
+        userRoles[account] = Role.None;
+        emit RoleRevoked(account, block.timestamp);
     }
 
-    function getRole(address _account) external view returns (Role) {
-        return userRoles[_account];
+    function getRole(address account) external view returns (Role) {
+        return userRoles[account];
     }
 
     // -------------------------------------------------------------------------
@@ -197,29 +197,29 @@ contract EvidenceRegistry {
     // -------------------------------------------------------------------------
 
     function addEvidence(
-        uint256 _caseId,
-        string memory _ipfsCID,
-        string memory _fileHash
+        uint256 caseId,
+        string memory ipfsCID,
+        string memory fileHash
     ) external onlyPolice {
-        if (bytes(_ipfsCID).length == 0) revert EmptyField("ipfsCID");
-        if (bytes(_fileHash).length == 0) revert EmptyField("fileHash");
-        if (fileHashExists[_fileHash]) revert DuplicateFileHash(_fileHash);
+        if (bytes(ipfsCID).length == 0) revert EmptyField("ipfsCID");
+        if (bytes(fileHash).length == 0) revert EmptyField("fileHash");
+        if (fileHashExists[fileHash]) revert DuplicateFileHash(fileHash);
 
         ++evidenceCount;
         uint256 newEvidenceId = evidenceCount;
 
         evidences[newEvidenceId] = Evidence({
             evidenceId: newEvidenceId,
-            caseId: _caseId,
-            ipfsCID: _ipfsCID,
-            fileHash: _fileHash,
+            caseId: caseId,
+            ipfsCID: ipfsCID,
+            fileHash: fileHash,
             uploadedBy: msg.sender,
             timestamp: block.timestamp,
             currentHolder: msg.sender,
             exists: true
         });
 
-        fileHashExists[_fileHash] = true;
+        fileHashExists[fileHash] = true;
 
         custodyHistory[newEvidenceId].push(CustodyRecord({
             from: address(0),
@@ -229,87 +229,87 @@ contract EvidenceRegistry {
 
         emit EvidenceAdded(
             newEvidenceId,
-            _caseId,
-            _ipfsCID,
-            _fileHash,
+            caseId,
+            ipfsCID,
+            fileHash,
             msg.sender,
             block.timestamp
         );
     }
 
     function addSupportingDoc(
-        uint256 _evidenceId,
-        string memory _ipfsCID,
-        string memory _fileHash,
-        string memory _docType
-    ) external onlyForensicOrLawyer evidenceExists(_evidenceId) {
-        if (bytes(_ipfsCID).length == 0) revert EmptyField("ipfsCID");
-        if (bytes(_fileHash).length == 0) revert EmptyField("fileHash");
-        if (bytes(_docType).length == 0) revert EmptyField("docType");
-        if (fileHashExists[_fileHash]) revert DuplicateFileHash(_fileHash);
+        uint256 evidenceId,
+        string memory ipfsCID,
+        string memory fileHash,
+        string memory docType
+    ) external onlyForensicOrLawyer evidenceExists(evidenceId) {
+        if (bytes(ipfsCID).length == 0) revert EmptyField("ipfsCID");
+        if (bytes(fileHash).length == 0) revert EmptyField("fileHash");
+        if (bytes(docType).length == 0) revert EmptyField("docType");
+        if (fileHashExists[fileHash]) revert DuplicateFileHash(fileHash);
 
         ++supportingDocCount;
         uint256 newDocId = supportingDocCount;
 
-        supportingDocs[_evidenceId].push(SupportingDoc({
+        supportingDocs[evidenceId].push(SupportingDoc({
             docId: newDocId,
-            evidenceId: _evidenceId,
-            ipfsCID: _ipfsCID,
-            fileHash: _fileHash,
+            evidenceId: evidenceId,
+            ipfsCID: ipfsCID,
+            fileHash: fileHash,
             uploadedBy: msg.sender,
             timestamp: block.timestamp,
-            docType: _docType
+            docType: docType
         }));
 
-        fileHashExists[_fileHash] = true;
+        fileHashExists[fileHash] = true;
 
         emit SupportingDocAdded(
             newDocId,
-            _evidenceId,
-            _ipfsCID,
-            _fileHash,
+            evidenceId,
+            ipfsCID,
+            fileHash,
             msg.sender,
-            _docType,
+            docType,
             block.timestamp
         );
     }
 
     function transferCustody(
-        uint256 _evidenceId,
-        address _newHolder
-    ) external evidenceExists(_evidenceId) onlyPoliceOrForensic {
-        if (_newHolder == address(0)) revert InvalidAddress();
+        uint256 evidenceId,
+        address newHolder
+    ) external evidenceExists(evidenceId) onlyPoliceOrForensic {
+        if (newHolder == address(0)) revert InvalidAddress();
 
-        Evidence storage evidence = evidences[_evidenceId];
+        Evidence storage evidence = evidences[evidenceId];
 
         if (evidence.currentHolder != msg.sender)
-            revert NotCurrentHolder(_evidenceId, msg.sender);
+            revert NotCurrentHolder(evidenceId, msg.sender);
 
         address previousHolder = evidence.currentHolder;
-        evidence.currentHolder = _newHolder;
+        evidence.currentHolder = newHolder;
 
-        custodyHistory[_evidenceId].push(CustodyRecord({
+        custodyHistory[evidenceId].push(CustodyRecord({
             from: previousHolder,
-            to: _newHolder,
+            to: newHolder,
             timestamp: block.timestamp
         }));
 
         emit CustodyTransferred(
-            _evidenceId,
+            evidenceId,
             previousHolder,
-            _newHolder,
+            newHolder,
             block.timestamp
         );
     }
 
     function recordIntegrityCheck(
-        uint256 _evidenceId,
-        bool _passed
-    ) external evidenceExists(_evidenceId) onlyForensicOrJudge {
+        uint256 evidenceId,
+        bool passed
+    ) external evidenceExists(evidenceId) onlyForensicOrJudge {
         emit IntegrityVerified(
-            _evidenceId,
+            evidenceId,
             msg.sender,
-            _passed,
+            passed,
             block.timestamp
         );
     }
@@ -319,26 +319,26 @@ contract EvidenceRegistry {
     // -------------------------------------------------------------------------
 
     function getEvidence(
-        uint256 _evidenceId
-    ) external view evidenceExists(_evidenceId) returns (Evidence memory) {
-        return evidences[_evidenceId];
+        uint256 evidenceId
+    ) external view evidenceExists(evidenceId) returns (Evidence memory) {
+        return evidences[evidenceId];
     }
 
     function getCustodyHistory(
-        uint256 _evidenceId
-    ) external view evidenceExists(_evidenceId) returns (CustodyRecord[] memory) {
-        return custodyHistory[_evidenceId];
+        uint256 evidenceId
+    ) external view evidenceExists(evidenceId) returns (CustodyRecord[] memory) {
+        return custodyHistory[evidenceId];
     }
 
     function getSupportingDocs(
-        uint256 _evidenceId
-    ) external view evidenceExists(_evidenceId) returns (SupportingDoc[] memory) {
-        return supportingDocs[_evidenceId];
+        uint256 evidenceId
+    ) external view evidenceExists(evidenceId) returns (SupportingDoc[] memory) {
+        return supportingDocs[evidenceId];
     }
 
     function isFileHashRegistered(
-        string calldata _fileHash
+        string calldata fileHash
     ) external view returns (bool) {
-        return fileHashExists[_fileHash];
+        return fileHashExists[fileHash];
     }
 }

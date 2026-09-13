@@ -461,9 +461,59 @@ review.
 ---
 
 ## Phase 9 — Blockchain Hardening & Identity
-**Status:** Not started. **Must include:** redeploying `EvidenceRegistry` to Sepolia with the
-fresh deployer wallet generated 2026-09-10 (see above) — the current live contract's owner key was
-publicly leaked in git history and can never be transferred, only replaced by redeployment.
+
+**Status:** In progress — 1 of 6 planned items done.
+
+Goal (from `docs/ROADMAP.md`): the Sepolia deployment looks and behaves like a real, audited,
+properly-governed product, not just a bare contract address.
+
+Planned scope, ordered so anything that could touch the Solidity source happens before the
+(expensive-to-redo) Sepolia redeploy:
+- [x] 1. Slither static analysis on `EvidenceRegistry.sol` — document + fix findings
+- [ ] 2. Gas reporting (`hardhat-gas-reporter`) — real per-operation cost numbers
+- [ ] 3. Wallet-ownership proof at registration (EIP-712 signed challenge)
+- [ ] 4. Multi-sig ownership (Safe, 2-of-3) + Sepolia redeployment — **must include** redeploying
+      `EvidenceRegistry` with the fresh deployer wallet generated 2026-09-10 (see Phase 8 section
+      above) — the current live contract's owner key was publicly leaked in git history and can
+      never be transferred, only replaced by redeployment
+- [ ] 5. Etherscan verification of the new contract
+- [ ] 6. Populate Sepolia — assign roles via Safe multi-sig approval
+
+### 2026-09-13 — fix: harden EvidenceRegistry per Slither findings (commit 1)
+Phase: 9 (commit 1 of planned scope)
+What changed: Ran Slither (Trail of Bits' static analyzer, free/open-source) against
+`EvidenceRegistry.sol` via its Hardhat integration. First pass: 20 findings, all Informational/
+Optimization severity — **zero High or Medium findings**, a genuinely clean result worth stating
+plainly in the security narrative. The 20 broke down as:
+- 1 real, worthwhile fix: `owner` flagged as `immutable`-eligible. It's assigned once in the
+  constructor and never reassigned anywhere in the contract (no `transferOwnership` exists) — so
+  marking it `immutable` removes it from storage entirely (moved into the contract's bytecode
+  instead), saving a persistent SLOAD on every `onlyOwner`-gated call (`assignRole`, `revokeRole`)
+  and cutting deployment gas too. Zero behavior change.
+- 19 `naming-convention` findings: every function parameter used a leading-underscore prefix
+  (`_account`, `_evidenceId`, etc.), which Slither's convention checker flags as not mixedCase.
+  Purely cosmetic — confirmed via `grep` across `test/`, `scripts/`, and
+  `backend/src/services/contract.service.ts` that every caller passes positional arguments, never
+  named-parameter object syntax, so renaming parameters inside the `.sol` file has zero blast
+  radius outside that one file. Renamed all of them (`_account` → `account`,
+  `_evidenceId` → `evidenceId`, etc.) rather than writing a suppression config — the fix was
+  genuinely as cheap as the finding suggested, unlike the AI service's gotchas earlier in this log.
+Verified: `npx hardhat compile` clean, full 29-test Hardhat suite still passing unchanged (rename
+only, no logic touched), and a second Slither run after the fix reports **0 findings across all
+102 detectors** (not just the 2 already known — the full battery: reentrancy, unchecked calls,
+access control, arithmetic issues, etc.).
+Gotcha: Slither is a separate Python toolchain (`pip install slither-analyzer`), not an npm
+package — installed it into a throwaway venv rather than committing it to the repo, since it's a
+run-when-needed audit tool, not a runtime or build dependency. No `requirements.txt`/lockfile
+entry added; anyone re-running this needs `pip install slither-analyzer` in their own venv (Python
+3.14 tested clean, no compatibility issue despite Slither being a somewhat conservative-support
+tool historically).
+Follow-ups spawned: Slither is not wired into CI — the roadmap only asked for "document and fix
+findings," not continuous enforcement. Worth reconsidering once Phase 9's other Solidity-adjacent
+work (commit 4's redeploy) is done, so CI catches regressions on the final contract, not an
+interim one. Commit 2 (gas reporting) is next.
+
+---
 
 ## Phase 10 — AI Layer Expansion
 **Status:** Not started.
