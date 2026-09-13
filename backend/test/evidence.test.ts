@@ -14,6 +14,7 @@ vi.mock("../src/services/pinata.service.js", () => ({
 const app = (await import("../src/app.js")).default;
 const { connectDB } = await import("../src/config/db.js");
 const { EVIDENCE_TEST_POLICE_KEY, POLICE_KEY } = await import("./setup/global-setup.js");
+const { signRegistrationChallenge } = await import("./setup/wallet-signing.js");
 
 const policeWallet = new ethers.Wallet(EVIDENCE_TEST_POLICE_KEY).address;
 // The backend always signs on-chain evidence registration with its own fixed
@@ -34,6 +35,7 @@ const settleNonce = () => new Promise((r) => setTimeout(r, 300));
 beforeAll(async () => {
   await connectDB();
 
+  const { signature } = await signRegistrationChallenge(app, EVIDENCE_TEST_POLICE_KEY);
   const register = await request(app).post("/api/auth/register").send({
     name: "Evidence Tester",
     email: "evidence-police@test.local",
@@ -41,6 +43,7 @@ beforeAll(async () => {
     role: "Police",
     department: "narcotics",
     walletAddress: policeWallet,
+    signature,
   });
   if (register.status !== 201) {
     throw new Error(`Test setup registration failed: ${JSON.stringify(register.body)}`);

@@ -1,9 +1,12 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { ethers } from "ethers";
+import crypto from "crypto";
 import { User, DEPARTMENT_REQUIRED_ROLES, type UserRole } from "../models/user.model.js";
+import { RegistrationChallenge } from "../models/registrationChallenge.model.js";
 import { ENV } from "../config/env.js";
 import { getOnChainRole } from "./contract.service.js";
+import { REGISTRATION_TYPES, getRegistrationDomain } from "../utils/eip712.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface RegisterPayload {
@@ -13,6 +16,7 @@ export interface RegisterPayload {
   role: UserRole;
   department?: string;
   walletAddress: string;
+  signature: string;
 }
 
 export interface LoginPayload {
@@ -28,9 +32,34 @@ export interface JWTPayload {
   walletAddress: string;
 }
 
+// ── Registration challenge ───────────────────────────────────────────────────
+// Step 1 of registration: issue a one-time EIP-712 nonce the wallet must sign
+// to prove it controls the private key for the address it's registering
+// with — closes the gap where `walletAddress` was otherwise just a public
+// fact anyone could type in (it's visible in on-chain role-assignment logs).
+export async function createRegistrationChallenge(walletAddress: string) {
+  if (!ethers.isAddress(walletAddress)) {
+    throw new Error("Invalid wallet address");
+  }
+
+  const nonce = crypto.randomBytes(16).toString("hex");
+  await RegistrationChallenge.findOneAndUpdate(
+    { walletAddress: walletAddress.toLowerCase() },
+    { nonce, createdAt: new Date() },
+    { upsert: true }
+  );
+
+  const domain = await getRegistrationDomain();
+  return {
+    domain,
+    types: REGISTRATION_TYPES,
+    value: { walletAddress, nonce, purpose: "registration" },
+  };
+}
+
 // ── Register ──────────────────────────────────────────────────────────────────
 export async function registerUser(payload: RegisterPayload) {
-  const { name, email, password, role, department, walletAddress } = payload;
+  const { name, email, password, role, department, walletAddress, signature } = payload;
 
   if (DEPARTMENT_REQUIRED_ROLES.includes(role) && !department?.trim()) {
     throw new Error(`Department is required for the ${role} role`);
@@ -50,14 +79,42 @@ export async function registerUser(payload: RegisterPayload) {
     throw new Error("Wallet address already registered");
   }
 
-  // ── On-chain role verification ────────────────────────────────────────────
-  // A user may only register with the role their wallet actually holds
-  // on-chain (assigned via the contract owner's assignRole). Without this,
-  // `role` would be a free-text claim the client could set to anything.
   if (!ethers.isAddress(walletAddress)) {
     throw new Error("Invalid wallet address");
   }
 
+  // ── Wallet-ownership proof ───────────────────────────────────────────────
+  // Verifies the caller controls walletAddress's private key, not just its
+  // public string — a signature over the exact one-time nonce issued by
+  // createRegistrationChallenge above. Consumed on both success and failure
+  // so a nonce can never be reused (replay protection).
+  const challenge = await RegistrationChallenge.findOne({
+    walletAddress: walletAddress.toLowerCase(),
+  });
+  if (!challenge) {
+    throw new Error(
+      "No active registration challenge for this wallet. Request one from /api/auth/challenge first."
+    );
+  }
+  await RegistrationChallenge.deleteOne({ _id: challenge._id });
+
+  const domain = await getRegistrationDomain();
+  const value = { walletAddress, nonce: challenge.nonce, purpose: "registration" };
+
+  let recoveredAddress: string;
+  try {
+    recoveredAddress = ethers.verifyTypedData(domain, REGISTRATION_TYPES, value, signature);
+  } catch {
+    throw new Error("Invalid signature — could not verify wallet ownership");
+  }
+  if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+    throw new Error("Signature does not match wallet address — wallet ownership not proven");
+  }
+
+  // ── On-chain role verification ────────────────────────────────────────────
+  // A user may only register with the role their wallet actually holds
+  // on-chain (assigned via the contract owner's assignRole). Without this,
+  // `role` would be a free-text claim the client could set to anything.
   const onChainRole = await getOnChainRole(walletAddress);
   if (onChainRole !== role) {
     throw new Error(

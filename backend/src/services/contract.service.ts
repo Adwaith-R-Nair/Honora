@@ -237,3 +237,8 @@ export async function getSupportingDocCount(): Promise<number> {
   const count = await contract.supportingDocCount();
   return Number(count);
 }
+
+export async function getChainId(): Promise<bigint> {
+  const network = await provider.getNetwork();
+  return network.chainId;
+}

@@ -471,7 +471,7 @@ Planned scope, ordered so anything that could touch the Solidity source happens 
 (expensive-to-redo) Sepolia redeploy:
 - [x] 1. Slither static analysis on `EvidenceRegistry.sol` — document + fix findings
 - [x] 2. Gas reporting — real per-operation cost numbers
-- [ ] 3. Wallet-ownership proof at registration (EIP-712 signed challenge)
+- [x] 3. Wallet-ownership proof at registration (EIP-712 signed challenge)
 - [ ] 4. Multi-sig ownership (Safe, 2-of-3) + Sepolia redeployment — **must include** redeploying
       `EvidenceRegistry` with the fresh deployer wallet generated 2026-09-10 (see Phase 8 section
       above) — the current live contract's owner key was publicly leaked in git history and can
@@ -553,6 +553,61 @@ Verified: this is purely an extra reporting layer over the exact same test run �
 passing, no behavior touched.
 Follow-ups spawned: none. Commit 3 (wallet-ownership proof via EIP-712) is next — the first commit
 in this phase that actually changes application logic.
+
+### 2026-09-13 — feat: prove wallet ownership at registration via EIP-712 (commit 3)
+Phase: 9 (commit 3 of planned scope)
+What changed: closes a real gap in `auth.service.ts` — registration verified a wallet *held* a
+role on-chain (`getOnChainRole`) but never that the registering person actually *controlled* that
+wallet's private key. Role-holding addresses are public (visible in any block explorer / in
+`assignRole` event logs), so anyone who knew a Police wallet's address could previously register
+claiming to be its owner. Registration is now two steps:
+- `POST /api/auth/challenge` (new) — takes `{ walletAddress }`, generates a random nonce, stores it
+  in a new `RegistrationChallenge` Mongo collection (TTL index, auto-expires after 5 minutes;
+  `findOneAndUpdate` upsert means requesting a new challenge invalidates any prior one for that
+  wallet), returns an EIP-712 typed-data payload to sign.
+- `POST /api/auth/register` — now also requires `signature`. Backend re-fetches the still-valid
+  challenge, rebuilds the exact same typed-data value, and calls `ethers.verifyTypedData(...)` —
+  rejects if the recovered address doesn't match `walletAddress`. The challenge is deleted whether
+  verification succeeds or fails, so a nonce can never be replayed.
+- EIP-712 domain (`backend/src/utils/eip712.ts`) binds `chainId` (new `getChainId()` export on
+  `contract.service.ts`) and `verifyingContract` (`ENV.CONTRACT_ADDRESS`) into the signed message,
+  so a signature can't be replayed against a different network or a different contract deployment.
+No contract changes, no redeploy — this is verified entirely off-chain via signature recovery.
+
+Frontend: the signup form's "Wallet Address" field was a **plain text box** — typing in an
+address proves nothing about controlling it, so proving ownership required actually replacing it.
+Added `Honora--Frontend/src/utils/wallet.js` — a dependency-free wrapper around the browser's
+injected wallet (`window.ethereum`, no ethers/wagmi needed on the frontend at all; every wallet
+supports `eth_requestAccounts` and `eth_signTypedData_v4` as raw JSON-RPC methods). `LoginModal.jsx`
+now shows a "Connect Wallet" button instead of a text input; on submit, it requests a challenge,
+signs it with the connected wallet, and only then submits. The domain/types/value signed are
+always exactly what the backend's `/challenge` response returned — the frontend never constructs
+them independently, so there's no way for the two sides to drift out of sync.
+
+Verified: full backend Vitest suite (40/40 passing) — rewrote all register-flow tests in
+`auth.test.ts`, plus the registration-setup helpers in `rbac.test.ts` and `evidence.test.ts`, to
+go through a real challenge→sign round trip (new shared test helper,
+`backend/test/setup/wallet-signing.ts`, using `ethers.Wallet.signTypedData` — genuine, valid
+cryptographic signing, just not through a browser). Added new tests specifically for the new
+logic: challenge issuance, missing signature, missing/expired challenge, and signature-doesn't-
+match-wallet (all correctly return 403/400 without touching the on-chain role check). `tsc --noEmit`
+clean, ESLint clean on both backend and frontend. Frontend: `npm run build` clean, and manually
+loaded the real signup modal in a browser — confirmed the new "Connect Wallet" button renders
+correctly and, when clicked, correctly triggers a **real MetaMask connection request** (this
+machine's Chrome profile has MetaMask installed) — proof the wiring is correct. Did not click
+through MetaMask's own approval popup myself; approving a connection on a real wallet extension is
+something Adwaith should do himself, not something to automate on his behalf, even for a local dev
+flow. Backend crypto logic is fully verified regardless (scripted-signer tests above) — this was
+purely a check that the button correctly reaches a real wallet, which it does.
+Gotcha: registerUser's check ordering matters and is deliberate — department check → duplicate
+email/wallet checks → address-format check → **signature verification** → on-chain role check.
+Keeping signature verification before the on-chain role check means a bad signature never reaches
+an RPC call; keeping the cheap duplicate/format checks before it means those failure paths don't
+need a real signature to test.
+Follow-ups spawned: Adwaith should click through the actual "Connect Wallet" → MetaMask approval →
+sign flow himself once he's ready, to confirm the real-wallet UX end-to-end (see verification
+commands below). Commit 4 (multi-sig ownership + Sepolia redeployment) is next — needs 3 signer
+wallet addresses from Adwaith first (2-of-3 Safe, decided earlier in this phase).
 
 ---
 

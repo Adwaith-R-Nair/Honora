@@ -10,9 +10,10 @@ import {
   RBAC_TEST_LAWYER_KEY,
   RBAC_TEST_JUDGE_KEY,
 } from "./setup/global-setup.js";
+import { signRegistrationChallenge } from "./setup/wallet-signing.js";
 
 async function registerAndLogin(role: string, key: string, emailPrefix: string) {
-  const walletAddress = new ethers.Wallet(key).address;
+  const { walletAddress, signature } = await signRegistrationChallenge(app, key);
   const email = `${emailPrefix}@rbac.test.local`;
   const departmentRequired = role === "Police" || role === "Forensic";
   const register = await request(app).post("/api/auth/register").send({
@@ -22,6 +23,7 @@ async function registerAndLogin(role: string, key: string, emailPrefix: string) 
     role,
     ...(departmentRequired ? { department: "narcotics" } : {}),
     walletAddress,
+    signature,
   });
   if (register.status !== 201) {
     throw new Error(`Test setup registration failed for ${role}: ${JSON.stringify(register.body)}`);

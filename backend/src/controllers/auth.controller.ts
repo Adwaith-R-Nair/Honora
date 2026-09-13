@@ -1,12 +1,39 @@
 import type { Request, Response } from "express";
-import { registerUser, loginUser } from "../services/auth.service.js";
+import { registerUser, loginUser, createRegistrationChallenge } from "../services/auth.service.js";
 import { User, DEPARTMENT_REQUIRED_ROLES } from "../models/user.model.js";
+
+/**
+ * POST /api/auth/challenge
+ *
+ * Step 1 of registration: issues a one-time EIP-712 nonce for a wallet
+ * address. The client must sign it with that wallet (proving key ownership)
+ * and pass the resulting signature to POST /api/auth/register.
+ *
+ * Request body: { "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" }
+ */
+export async function challenge(req: Request, res: Response): Promise<void> {
+  try {
+    const { walletAddress } = req.body;
+
+    if (!walletAddress) {
+      res.status(400).json({ success: false, error: "walletAddress is required" });
+      return;
+    }
+
+    const result = await createRegistrationChallenge(walletAddress);
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create challenge";
+    res.status(400).json({ success: false, error: message });
+  }
+}
 
 /**
  * POST /api/auth/register
  *
- * Registers a new user in MongoDB.
- * The wallet address provided must match the on-chain role assignment.
+ * Registers a new user in MongoDB. Requires a signature (from
+ * POST /api/auth/challenge) proving ownership of walletAddress, and the
+ * wallet's on-chain role must match the claimed role.
  * `department` is required for Police/Forensic (scopes their AI search
  * results), optional for Lawyer/Judge (unset = unrestricted search).
  *
@@ -17,18 +44,19 @@ import { User, DEPARTMENT_REQUIRED_ROLES } from "../models/user.model.js";
  *   "password": "securepassword",
  *   "role": "Police",
  *   "department": "narcotics",
- *   "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+ *   "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+ *   "signature": "0x..."
  * }
  */
 export async function register(req: Request, res: Response): Promise<void> {
   try {
-    const { name, email, password, role, department, walletAddress } = req.body;
+    const { name, email, password, role, department, walletAddress, signature } = req.body;
 
     // ── Input validation ──────────────────────────────────────────────────────
-    if (!name || !email || !password || !role || !walletAddress) {
+    if (!name || !email || !password || !role || !walletAddress || !signature) {
       res.status(400).json({
         success: false,
-        error: "All fields are required: name, email, password, role, walletAddress",
+        error: "All fields are required: name, email, password, role, walletAddress, signature",
       });
       return;
     }
@@ -57,7 +85,15 @@ export async function register(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const result = await registerUser({ name, email, password, role, department, walletAddress });
+    const result = await registerUser({
+      name,
+      email,
+      password,
+      role,
+      department,
+      walletAddress,
+      signature,
+    });
 
     res.status(201).json({
       success: true,
@@ -68,7 +104,11 @@ export async function register(req: Request, res: Response): Promise<void> {
     const message = error instanceof Error ? error.message : "Registration failed";
     const status = message.includes("already")
       ? 409
-      : message.includes("on-chain") || message.includes("Invalid wallet address")
+      : message.includes("on-chain") ||
+          message.includes("Invalid wallet address") ||
+          message.includes("signature") ||
+          message.includes("wallet ownership") ||
+          message.includes("registration challenge")
         ? 403
         : 500;
     res.status(status).json({ success: false, error: message });

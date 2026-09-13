@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./useAuth";
+import { requestWalletChallenge } from "../../services/api";
+import { connectWallet, signTypedData, isWalletAvailable } from "../../utils/wallet";
 import { CloseIcon, ShieldIcon, GavelIcon, CourthouseIcon, ForensicIcon } from "../../assets/icons/Icons";
 
 const ROLE_ICONS = {
@@ -38,6 +40,7 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
   const [department, setDepartment] = useState("");
   const [isSignup, setIsSignup] = useState(initialSignup);
   const [loading, setLoading] = useState(false);
+  const [walletConnecting, setWalletConnecting] = useState(false);
   const [error, setError] = useState("");
 
   const { login, signup } = useAuth();
@@ -49,6 +52,19 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
 
   const handleOverlay = (e) => {
     if (e.target === e.currentTarget) onClose();
+  };
+
+  const handleConnectWallet = async () => {
+    setError("");
+    setWalletConnecting(true);
+    try {
+      const address = await connectWallet();
+      setWalletAddress(address);
+    } catch (err) {
+      setError(err.message || "Failed to connect wallet.");
+    } finally {
+      setWalletConnecting(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -65,8 +81,8 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
         setError("Full name is required.");
         return;
       }
-      if (!walletAddress.trim()) {
-        setError("Wallet address is required.");
+      if (!walletAddress) {
+        setError("Please connect your wallet.");
         return;
       }
       if (departmentRequired && !department.trim()) {
@@ -82,13 +98,22 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
       let result;
 
       if (isSignup) {
+        // Wallet-ownership proof: get a one-time nonce for this address, sign
+        // it with the connected wallet, then submit. Proves the signer
+        // actually controls walletAddress's private key — not just its
+        // public string.
+        const challengeRes = await requestWalletChallenge(walletAddress);
+        const { domain, types, value } = challengeRes.data;
+        const signature = await signTypedData(walletAddress, domain, types, value);
+
         result = await signup(
           name.trim(),
           email.trim(),
           password.trim(),
           backendRole,
-          walletAddress.trim(),
-          departmentRequired ? department.trim() : undefined
+          walletAddress,
+          departmentRequired ? department.trim() : undefined,
+          signature
         );
       } else {
         result = await login(email.trim(), password.trim());
@@ -150,17 +175,41 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
             </div>
           )}
 
-          {/* Wallet Address Field (Signup Only) */}
+          {/* Wallet Connection (Signup Only) — must be a real connected
+              wallet, not typed text, since it needs to sign a proof-of-
+              ownership challenge before registration is accepted. */}
           {isSignup && (
             <div className="input-group">
-              <label>Wallet Address</label>
-              <input
-                type="text"
-                placeholder="Your wallet address (e.g., 0x...)"
-                value={walletAddress}
-                onChange={(e) => setWalletAddress(e.target.value)}
-                required
-              />
+              <label>Wallet</label>
+              {walletAddress ? (
+                <div className="wallet-connected">
+                  <span>
+                    ✅ {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
+                  </span>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => setWalletAddress("")}
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-gold modal-btn"
+                  onClick={handleConnectWallet}
+                  disabled={walletConnecting}
+                >
+                  {walletConnecting ? (
+                    <span className="loader" />
+                  ) : isWalletAvailable() ? (
+                    "Connect Wallet"
+                  ) : (
+                    "Install a wallet extension"
+                  )}
+                </button>
+              )}
             </div>
           )}
 

@@ -29,13 +29,22 @@ export const AuthProvider = ({ children }) => {
    * @param {string} role - User role
    * @param {string} walletAddress - Wallet address
    * @param {string} [department] - Required for Police/Forensic, optional for Lawyer/Judge
+   * @param {string} signature - EIP-712 signature proving wallet ownership (from api.requestWalletChallenge)
    */
-  const signup = async (name, email, password, role, walletAddress, department) => {
+  const signup = async (name, email, password, role, walletAddress, department, signature) => {
     try {
       setError(null);
       setLoading(true);
 
-      const response = await api.signup(name, email, password, role, walletAddress, department);
+      const response = await api.signup(
+        name,
+        email,
+        password,
+        role,
+        walletAddress,
+        department,
+        signature
+      );
 
       // Response from backend: { success: true, token: "...", user: {...} }
       const loginData = response.data || response;
