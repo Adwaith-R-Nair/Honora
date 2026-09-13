@@ -6,6 +6,11 @@ dotenv.config();
 
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
 const SEPOLIA_PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY;
+// Overridable so docker-compose's contract-deploy service can point this at
+// the hardhat-node service's container name instead of 127.0.0.1 — unset,
+// this defaults to the same address a local terminal has always used.
+const LOCALHOST_RPC_URL =
+  process.env.HARDHAT_LOCALHOST_RPC_URL || "http://127.0.0.1:8545";
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthers],
@@ -13,7 +18,7 @@ export default defineConfig({
   networks: {
     localhost: {
       type: "http",
-      url: "http://127.0.0.1:8545",
+      url: LOCALHOST_RPC_URL,
     },
     // Only registered when a real URL is present — an empty-string URL fails
     // Hardhat 3's config validation outright (HHE15) even for commands that

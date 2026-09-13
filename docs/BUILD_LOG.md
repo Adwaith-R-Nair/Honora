@@ -47,8 +47,8 @@ Not a commit (no code changed). Done ahead of Phase 8's first commit at Adwaith'
 
 ## Phase 8 — DevOps Foundation & Security Hygiene
 
-**Status:** In progress — 5 of 6 planned items done (the RBAC audit findings expanded item 3 into
-3a/3b/3c along the way). Only Dockerization remains.
+**Status:** Complete — all planned items done (the RBAC audit findings expanded item 3 into
+3a/3b/3c along the way).
 
 Goal (from `docs/ROADMAP.md`): a repo that catches its own regressions, zero outstanding known
 security debt.
@@ -70,8 +70,8 @@ Planned scope (to be broken into individual commits before work starts):
   - [x] 5. GitHub Actions CI pipeline (compile, typecheck, lint, run all test suites, build frontend)
 - Dockerize backend + AI service, `docker-compose.yml` with local Hardhat node — split into:
   - [x] 6. `backend/Dockerfile`
-  - [ ] 7. `ailayer-querying/Dockerfile`
-  - [ ] 8. `docker-compose.yml`
+  - [x] 7. `ailayer-querying/Dockerfile`
+  - [x] 8. `docker-compose.yml`
 
 ### 2026-09-11 — c9cb304 — test: add Hardhat contract test suite for EvidenceRegistry
 Phase: 8 (commit 1 of planned scope)
@@ -410,6 +410,53 @@ earlier call already installed. Single resolution pass with all needed indexes i
 splitting installs "for clarity."
 Follow-ups spawned: none — this is now fully verified and closed. Commit 8 (`docker-compose.yml`)
 is next.
+
+### 2026-09-13 — chore: add docker-compose for local dev (commit 8)
+Phase: 8 (commit 8 of planned scope — closes the Dockerize item)
+What changed: `docker-compose.yml` orchestrates 4 of the 5 local dev terminals —
+`hardhat-node`, a one-shot `contract-deploy`, `backend`, `ai-service` — into a single
+`docker compose up`. Frontend deliberately stays out (static Vite dev server, no startup-order
+dependency on anything here — containerizing Vite dev mode risks musl/glibc native-binary
+mismatches for esbuild/Rollup, for zero orchestration benefit; still runs via `npm run dev`).
+Added `contracts/Dockerfile` — single-stage (unlike backend's multi-stage compile-then-slim),
+since this image is dev-only tooling that needs the full Hardhat toolchain present at runtime to
+actually run `hardhat node`/`hardhat run`, not just a compiled artifact. `CMD` binds
+`--hostname 0.0.0.0` (Hardhat defaults to `127.0.0.1`, unreachable from other containers).
+Small change to `hardhat.config.ts`: the `localhost` network URL is now overridable via
+`HARDHAT_LOCALHOST_RPC_URL`, defaulting to the same `http://127.0.0.1:8545` as before — needed so
+the `contract-deploy` container can reach `hardhat-node` by its compose service name instead of
+loopback. Verified via `npx hardhat compile` + full 29-test contract suite still passing.
+`backend`/`ai-service` still read real secrets (`PINATA_JWT`, `MONGODB_URI`, `JWT_SECRET`,
+`QDRANT_URL`, `QDRANT_API_KEY`) from `backend/.env`/`ailayer-querying/.env` via `env_file:` —
+untouched by compose. Only compose-networking-specific values (service-to-service URLs, the local
+chain's well-known test-account keys, matching the convention already in
+`backend/test/setup/global-setup.ts`) are set inline in `docker-compose.yml`.
+Gotcha worth recording: `CONTRACT_ADDRESS` is hardcoded in the backend service's environment
+rather than wired up dynamically. This works because it's deterministic — on a fresh ephemeral
+chain (the `hardhat-node` container has no volume for chain state, so every `docker compose up`
+starts a brand-new chain), `setup.ts`'s `contract.deploy()` is always the very first transaction
+ever sent from account #0 (nonce 0), so the CREATE address is always the same. Verified
+empirically against this exact codebase (not assumed from memory — an earlier guess at the
+"well-known" address was one hex digit off) by running a throwaway `hardhat node` + `setup.ts`
+locally before writing the compose file, and confirmed twice more by running the full compose
+stack up/down/up: both runs deployed to the identical `0x5FbDB2315678afecb367f032d93F642f64180aa3`.
+This breaks only if `setup.ts` is changed to send an earlier transaction from account #0 before
+the deploy — if the hardcoded address ever seems wrong, check `docker compose logs contract-deploy`
+for the real one.
+Verified end-to-end: `docker compose up --build` — all 4 services start in correct dependency
+order (`hardhat-node` healthy → `contract-deploy` runs and exits 0 → `backend`/`ai-service`
+start). Hit `GET /health` on both backend (200) and AI service (200, real Qdrant credentials).
+Exercised a real contract-reading code path via `POST /api/auth/register` (hit MongoDB Atlas's
+uniqueness check against a wallet registered in an earlier session — proof the request pipeline,
+Mongo connection, and on-chain role check are all live). Tore the whole stack down and brought it
+back up fresh to confirm reproducibility — identical deploy address both times. Reclaimed build
+cache after verification (`docker builder prune -f`) — the 4 working images themselves
+(~2.9GB total) are kept, since removing those would defeat the point of building them.
+Follow-ups spawned: frontend-in-compose deliberately deferred, not forgotten — if it's ever
+wanted, add it behind a compose `profiles: ["full"]` entry so the default `docker compose up`
+stays at 4 services. No other open items for Phase 8's Dockerize scope; Phase 8's remaining items
+(from the top of this section) are already checked off — Phase 8 is now complete pending final
+review.
 
 ---
 

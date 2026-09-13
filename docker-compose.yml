@@ -1,0 +1,78 @@
+# Collapses 4 of the 5 local dev terminals (Hardhat node, setup.ts, backend,
+# AI service) into `docker compose up`. Frontend deliberately stays out —
+# it's a static dev server with no startup-order dependency on anything
+# here, and containerizing Vite's dev mode risks musl/glibc native-binary
+# mismatches (esbuild/Rollup) for no orchestration benefit. Run it separately
+# with `npm run dev` in Honora--Frontend/.
+#
+# Real secrets (PINATA_JWT, MONGODB_URI, JWT_SECRET, QDRANT_URL,
+# QDRANT_API_KEY) still come from backend/.env and ailayer-querying/.env via
+# env_file — untouched by this file. Only compose-networking-specific values
+# (service-to-service URLs, the local chain's well-known test keys) are
+# overridden below.
+
+services:
+  hardhat-node:
+    build:
+      context: .
+      dockerfile: contracts/Dockerfile
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8545',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  # One-shot: deploys EvidenceRegistry + assigns roles, then exits. Backend
+  # waits for this to complete successfully before starting.
+  contract-deploy:
+    build:
+      context: .
+      dockerfile: contracts/Dockerfile
+    command: ["npx", "hardhat", "run", "scripts/setup.ts", "--network", "localhost"]
+    environment:
+      HARDHAT_LOCALHOST_RPC_URL: http://hardhat-node:8545
+    depends_on:
+      hardhat-node:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: backend/.env
+    environment:
+      RPC_URL: http://hardhat-node:8545
+      # Deterministic — verified empirically against this exact codebase: on
+      # a fresh ephemeral chain (no volume for chain state), setup.ts's
+      # contract.deploy() is always the very first transaction from account
+      # #0 (nonce 0), so the CREATE address always lands here. Breaks only if
+      # setup.ts starts sending an earlier tx from account #0 first — if so,
+      # re-check with `docker compose logs contract-deploy`.
+      CONTRACT_ADDRESS: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+      AI_SERVICE_URL: http://ai-service:8000
+      # Well-known local-only Hardhat test-account keys — same convention
+      # already used in backend/test/setup/global-setup.ts. Never used
+      # outside this ephemeral local chain.
+      PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+      FORENSIC_PRIVATE_KEY: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
+      LAWYER_PRIVATE_KEY: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
+      JUDGE_PRIVATE_KEY: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
+    ports:
+      - "3000:3000"
+    depends_on:
+      contract-deploy:
+        condition: service_completed_successfully
+
+  ai-service:
+    build:
+      context: ./ailayer-querying
+    env_file: ailayer-querying/.env
+    environment:
+      EMS_BACKEND_URL: http://backend:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
