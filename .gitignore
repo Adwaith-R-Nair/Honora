@@ -38,6 +38,9 @@ Thumbs.db
 deployment.json
 deployment-sepolia.json
 
+# Gas report export (regenerate with: npx hardhat test --gas-stats-json gas-stats.json)
+gas-stats.json
+
 # Logs
 *.log
 npm-debug.log*
