@@ -470,7 +470,7 @@ properly-governed product, not just a bare contract address.
 Planned scope, ordered so anything that could touch the Solidity source happens before the
 (expensive-to-redo) Sepolia redeploy:
 - [x] 1. Slither static analysis on `EvidenceRegistry.sol` — document + fix findings
-- [ ] 2. Gas reporting (`hardhat-gas-reporter`) — real per-operation cost numbers
+- [x] 2. Gas reporting — real per-operation cost numbers
 - [ ] 3. Wallet-ownership proof at registration (EIP-712 signed challenge)
 - [ ] 4. Multi-sig ownership (Safe, 2-of-3) + Sepolia redeployment — **must include** redeploying
       `EvidenceRegistry` with the fresh deployer wallet generated 2026-09-10 (see Phase 8 section
@@ -512,6 +512,47 @@ Follow-ups spawned: Slither is not wired into CI — the roadmap only asked for 
 findings," not continuous enforcement. Worth reconsidering once Phase 9's other Solidity-adjacent
 work (commit 4's redeploy) is done, so CI catches regressions on the final contract, not an
 interim one. Commit 2 (gas reporting) is next.
+
+### 2026-09-13 — docs: record EvidenceRegistry gas usage baseline (commit 2)
+Phase: 9 (commit 2 of planned scope)
+What changed: the roadmap's original plan called for adding `hardhat-gas-reporter`. Checked its
+peer dependency (`npm view hardhat-gas-reporter peerDependencies` → `{ hardhat: "^2.16.0" }`) — a
+real, hard incompatibility, this project runs Hardhat `^3.1.10`, and that package hasn't been
+updated for Hardhat 3's rewritten (ESM-native) plugin architecture. Rather than assume a fix or
+downgrade anything, checked Hardhat 3's own current docs directly: gas statistics are now
+**built into Hardhat 3 core**, no third-party plugin needed at all — `hardhat test --gas-stats`
+prints a per-function/per-deployment gas table straight from the same test run, and
+`--gas-stats-json <path>` can export it as JSON if ever needed for tooling. Net result: **zero
+code changes** for this commit — no new dependency, no `hardhat.config.ts` edit. Just ran it and
+recorded the real numbers below for Phase 11 (scale conversation) and Phase 12 (performance
+write-up) to reference later, from the existing 29-test suite:
+
+| Function | Avg gas | #calls in suite |
+|---|---|---|
+| Deployment | 2,622,461 | 29 |
+| `addEvidence` | 302,417 | 14 |
+| `addSupportingDoc` | 260,826 | 3 |
+| `transferCustody` | 104,535 | 1 |
+| `assignRole` | 46,580 | 109 |
+| `getSupportingDocs` | 45,770 | 1 |
+| `getEvidence` | 40,549 | 2 |
+| `getCustodyHistory` | 37,539 | 2 |
+| `recordIntegrityCheck` | 28,951 | 2 |
+| `isFileHashRegistered` | 24,727 | 2 |
+| `getRole` | 24,414 | 2 |
+| `evidenceCount` / `supportingDocCount` | 23,577 / 23,512 | 1 each |
+| `revokeRole` | 23,927 | 1 |
+| `owner` | 21,482 | 1 |
+
+Bytecode size: 11,928 bytes. Contract deployment (~2.6M gas) is by far the most expensive single
+operation, as expected — it only happens once per redeploy, not per-transaction. Among regular
+operations, `addEvidence` and `addSupportingDoc` are the priciest (string storage for IPFS
+CIDs/hashes), `assignRole` and view-adjacent calls are cheap — useful context for Phase 11's scale
+conversation about cost-per-case-file.
+Verified: this is purely an extra reporting layer over the exact same test run — same 29/29
+passing, no behavior touched.
+Follow-ups spawned: none. Commit 3 (wallet-ownership proof via EIP-712) is next — the first commit
+in this phase that actually changes application logic.
 
 ---
 
