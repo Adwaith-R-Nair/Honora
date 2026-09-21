@@ -32,9 +32,13 @@ export const AuthProvider = ({ children }) => {
    * @param {string} signature - EIP-712 signature proving wallet ownership (from api.requestWalletChallenge)
    */
   const signup = async (name, email, password, role, walletAddress, department, signature) => {
+    // Deliberately does not touch the shared `loading` flag — see the note
+    // in login() above. Registration in particular takes several seconds
+    // (two MetaMask round-trips), so this mattered a lot: setting it here
+    // was unmounting RoleSelection (and this modal) for the whole request,
+    // silently discarding whatever error the backend returned.
     try {
       setError(null);
-      setLoading(true);
 
       const response = await api.signup(
         name,
@@ -48,9 +52,9 @@ export const AuthProvider = ({ children }) => {
 
       // Response from backend: { success: true, token: "...", user: {...} }
       const loginData = response.data || response;
-        if (loginData.token && loginData.user) {
-            setToken(loginData.token);
-            setUser(loginData.user);
+      if (loginData.token && loginData.user) {
+        setToken(loginData.token);
+        setUser(loginData.user);
 
         // Store in localStorage
         localStorage.setItem("honora_token", loginData.token);
@@ -64,8 +68,6 @@ export const AuthProvider = ({ children }) => {
       const errorMsg = err.message || "Signup failed";
       setError(errorMsg);
       return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -75,9 +77,15 @@ export const AuthProvider = ({ children }) => {
    * @param {string} password - Password
    */
   const login = async (email, password) => {
+    // Deliberately does not touch the shared `loading` flag — that flag
+    // gates whether RedirectIfAuthed/ProtectedRoute render their children
+    // at all (App.jsx), for the app's one-time "checking localStorage for a
+    // stored session on boot" phase. Reusing it here would unmount the
+    // calling page (and this modal) for the full duration of the request.
+    // LoginModal already tracks its own local `loading` for the submit
+    // button's spinner.
     try {
       setError(null);
-      setLoading(true);
 
       const response = await api.login(email, password);
       const loginData = response.data || response;
@@ -99,8 +107,6 @@ export const AuthProvider = ({ children }) => {
       const errorMsg = err.message || "Login failed";
       setError(errorMsg);
       return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
     }
   };
 

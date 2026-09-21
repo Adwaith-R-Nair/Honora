@@ -119,7 +119,7 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
         result = await login(email.trim(), password.trim());
       }
 
-      // Check if the result has the data we need 
+      // Check if the result has the data we need
       if (result && (result.success || result.token)) {
         onClose();
         // Redirect using the original UI role to match your ROLE_ROUTES keys

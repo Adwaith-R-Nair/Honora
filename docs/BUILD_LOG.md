@@ -609,6 +609,46 @@ sign flow himself once he's ready, to confirm the real-wallet UX end-to-end (see
 commands below). Commit 4 (multi-sig ownership + Sepolia redeployment) is next — needs 3 signer
 wallet addresses from Adwaith first (2-of-3 Safe, decided earlier in this phase).
 
+### 2026-09-14 — fix: unmask registration errors and clean up wallet UX (follow-up to commit 3)
+Phase: 9 (unplanned follow-up — surfaced by Adwaith actually clicking through the real MetaMask
+flow himself, exactly the follow-up commit 3 called for)
+What changed — three issues found through hands-on testing, one of them a real, serious bug:
+1. **The real bug**: every failed registration silently discarded its own error message and
+   dumped the user back at the bare role-selection screen with zero explanation — this is what
+   caused a long, confusing debugging session (chased "wallet already registered" duplicates from
+   old March-seeded demo accounts, thinking it was a broken redirect). Root cause, found via
+   temporary mount/unmount + state-change logging (not guesswork): `AuthProvider`'s `loading` flag
+   in `useAuth.jsx` was doing double duty — it's meant to mean "the app is still checking
+   localStorage for a saved session" (used once, at boot, by `RedirectIfAuthed` and
+   `ProtectedRoute` in `App.jsx` to decide whether to render their children at all) — but
+   `login()`/`signup()` were *also* setting it to `true` for the duration of their own request.
+   Since `/role` is wrapped in `RedirectIfAuthed`, calling `signup()` unmounted the entire
+   page — form, modal, and all — for the whole request, then remounted it fresh (local state
+   reset) once done, regardless of success or failure. Confirmed via logging that `setError(...)`
+   *was* being called correctly with the right message — just on a component that had already been
+   torn down, so React silently dropped it. Fix: `login()`/`signup()` no longer touch the shared
+   `loading` flag at all — `LoginModal` already tracks its own local `loading` for the submit
+   button's spinner, so nothing needed the shared one.
+2. **"Change wallet" UX**: clicking it silently reused the already-approved account instead of
+   letting the user pick a different one, since a trusted site doesn't get MetaMask's account
+   picker on a plain `eth_requestAccounts` call. Fixed in `wallet.js`'s `connectWallet()` by
+   calling `wallet_requestPermissions` first — forces the picker every time, with a fallback for
+   wallets that don't support that method.
+3. **Styling**: the "Change" link had no matching CSS at all (used a class only styled inside a
+   different, unrelated container) and rendered as a raw unstyled HTML button. Added
+   `.wallet-connected`/`.wallet-connected .link-button` rules in `App.css` matching the existing
+   input/link visual language.
+Verified: reproduced the exact failure with the already-registered Police test wallet — error
+now renders inline ("Wallet address already registered") and the modal stays open with the
+filled-in form intact, instead of vanishing. `npm run build` clean, ESLint clean.
+Also worth recording (not a bug — expected behavior confirmed during this session): all four
+"well-known" Hardhat test wallets already have real demo accounts, seeded back in March 2026
+(`scripts/seed.ts`, passwords `police123`/`forensic123`/`lawyer123`/`judge123`) — long before this
+phase's work. Every registration attempt against them correctly failed with 409, which is exactly
+right; it isn't a gap to close. Login → dashboard flow was independently confirmed fully working
+(real MongoDB data, correct role-gated UI) using those seeded credentials.
+Follow-ups spawned: none. Commit 4 (multi-sig ownership + Sepolia redeployment) is next.
+
 ---
 
 ## Phase 10 — AI Layer Expansion

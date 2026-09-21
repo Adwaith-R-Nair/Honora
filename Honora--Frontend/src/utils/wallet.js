@@ -15,6 +15,23 @@ export async function connectWallet() {
     );
   }
 
+  try {
+    // wallet_requestPermissions forces the account-picker UI every time,
+    // even on a site MetaMask already trusts — without this, a repeat call
+    // (e.g. the "Change" button) silently returns whichever account is
+    // currently active instead of letting the user pick a different one.
+    await window.ethereum.request({
+      method: "wallet_requestPermissions",
+      params: [{ eth_accounts: {} }],
+    });
+  } catch (err) {
+    if (err.code === 4001) {
+      throw new Error("Wallet connection was rejected.");
+    }
+    // Some injected wallets don't support wallet_requestPermissions — fall
+    // through to the plain connect call below rather than failing outright.
+  }
+
   const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
   if (!accounts || accounts.length === 0) {
     throw new Error("No wallet account was selected.");

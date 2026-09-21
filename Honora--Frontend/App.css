@@ -330,6 +330,16 @@ body {
 .input-group select:focus { border-color: var(--gold-dim); background: rgba(212,175,55,0.04); box-shadow: 0 0 0 3px rgba(212,175,55,0.08); }
 .modal-btn   { width: 100%; margin-top: 8px; justify-content: center; }
 .modal-error { font-size: 0.82rem; color: var(--danger); text-align: center; letter-spacing: 0.05em; }
+.wallet-connected {
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px 16px; color: var(--text); font-size: 0.9rem;
+}
+.wallet-connected .link-button {
+  background: none; border: none; color: var(--gold); cursor: pointer;
+  font-weight: 600; text-decoration: underline; padding: 0; font-size: 0.78rem;
+}
+.wallet-connected .link-button:hover { opacity: 0.8; }
 .modal-notice { font-size: 0.7rem; color: var(--text-muted); text-align: center; letter-spacing: 0.04em; line-height: 1.6; margin-top: -4px; }
 .modal-switch { font-size: 0.8rem; color: var(--text-dim); text-align: center; margin-top: 4px; }
 .modal-switch .link-button { background: none; border: none; color: var(--gold); cursor: pointer; font-weight: 600; text-decoration: underline; padding: 0; font-size: inherit; }
