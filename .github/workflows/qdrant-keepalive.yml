@@ -1,0 +1,26 @@
+name: Qdrant Keepalive
+
+# Qdrant Cloud's free tier suspends a cluster after a period of inactivity.
+# This pings it on a schedule so it never goes idle long enough to trip that.
+# workflow_dispatch lets us trigger it manually to verify the secrets/URL
+# are wired up correctly before trusting the schedule.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping Qdrant cluster
+        run: |
+          curl --fail --silent --show-error \
+            --max-time 20 \
+            -H "api-key: ${{ secrets.QDRANT_API_KEY }}" \
+            "${{ secrets.QDRANT_URL }}/collections"
