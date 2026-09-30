@@ -649,6 +649,25 @@ right; it isn't a gap to close. Login → dashboard flow was independently confi
 (real MongoDB data, correct role-gated UI) using those seeded credentials.
 Follow-ups spawned: none. Commit 4 (multi-sig ownership + Sepolia redeployment) is next.
 
+### 2026-09-30 — 90e9d32 — ci: add scheduled Qdrant keepalive ping
+Phase: none (unplanned ops fix — not a roadmap line item, surfaced by Adwaith noticing the Qdrant
+Cloud cluster kept getting suspended for inactivity)
+What changed: new `.github/workflows/qdrant-keepalive.yml` — a GitHub Actions workflow on a daily
+`schedule` cron (06:00 UTC) plus `workflow_dispatch` for manual runs, hitting
+`GET {QDRANT_URL}/collections` with the `api-key` header via `curl --fail`, so a non-2xx response
+fails the run and GitHub's default failure-notification email fires. Reads `QDRANT_URL` /
+`QDRANT_API_KEY` from repo Actions secrets (added by Adwaith directly in GitHub, never touched by
+this session).
+Gotchas / deviations from plan: none. Considered a Claude Code `/schedule` routine instead, but
+picked GitHub Actions since it's versioned in-repo, doesn't depend on any Claude Code session
+being alive, and sits naturally alongside the existing `ci.yml` from Phase 8.
+Verified: triggered a real `workflow_dispatch` run (`gh workflow run` / `gh run watch`) — run
+`36675152475` completed `success`; log shows the actual Qdrant response body,
+`{"result":{"collections":[{"name":"evidence_vectors"}]},"status":"ok",...}`, confirming this is a
+live authenticated round-trip to the cluster, not just a green checkmark.
+Follow-ups spawned: none. Revisit the cron cadence if Qdrant Cloud's actual idle-suspension window
+turns out to be shorter than expected (unverified from memory — check the Qdrant Cloud console).
+
 ---
 
 ## Phase 10 — AI Layer Expansion
