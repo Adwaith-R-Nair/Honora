@@ -665,8 +665,11 @@ Verified: triggered a real `workflow_dispatch` run (`gh workflow run` / `gh run 
 `36675152475` completed `success`; log shows the actual Qdrant response body,
 `{"result":{"collections":[{"name":"evidence_vectors"}]},"status":"ok",...}`, confirming this is a
 live authenticated round-trip to the cluster, not just a green checkmark.
-Follow-ups spawned: none. Revisit the cron cadence if Qdrant Cloud's actual idle-suspension window
-turns out to be shorter than expected (unverified from memory — check the Qdrant Cloud console).
+Follow-ups spawned: none. Idle-suspension window confirmed against Qdrant's own docs
+(qdrant.tech/documentation/cloud/create-cluster/, checked 2026-09-30): free tier clusters are
+"automatically suspended after 1 week, and deleted after 4 weeks of inactivity if not
+reactivated." The daily cron is a 7x margin against the 1-week suspension threshold — no change
+needed.
 
 ---
 
