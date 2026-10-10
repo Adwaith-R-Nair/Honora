@@ -34,10 +34,10 @@ async function request(endpoint, options = {}, baseUrl = BASE_URL) {
 
 // ============ AUTHENTICATION ============
 
-export const requestWalletChallenge = (walletAddress) =>
+export const requestWalletChallenge = (walletAddress, purpose) =>
   request("/auth/challenge", {
     method: "POST",
-    body: JSON.stringify({ walletAddress }),
+    body: JSON.stringify({ walletAddress, purpose }),
   });
 
 export const signup = (name, email, password, role, walletAddress, department, signature) =>
@@ -46,10 +46,10 @@ export const signup = (name, email, password, role, walletAddress, department, s
     body: JSON.stringify({ name, email, password, role, department, walletAddress, signature }),
   });
 
-export const login = (email, password) =>
+export const login = (email, password, signature) =>
   request("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, signature }),
   });
 
 export const getCurrentUser = () =>

@@ -75,8 +75,11 @@ export const AuthProvider = ({ children }) => {
    * Login user
    * @param {string} email - Email address
    * @param {string} password - Password
+   * @param {string} signature - EIP-712 signature proving current control of
+   *   the wallet already on file for this account (from
+   *   api.requestWalletChallenge(walletAddress, "login"))
    */
-  const login = async (email, password) => {
+  const login = async (email, password, signature) => {
     // Deliberately does not touch the shared `loading` flag — that flag
     // gates whether RedirectIfAuthed/ProtectedRoute render their children
     // at all (App.jsx), for the app's one-time "checking localStorage for a
@@ -87,7 +90,7 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
 
-      const response = await api.login(email, password);
+      const response = await api.login(email, password, signature);
       const loginData = response.data || response;
 
       // Response from backend: { success: true, token: "...", user: {...} }

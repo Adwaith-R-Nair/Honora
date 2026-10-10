@@ -1,26 +1,42 @@
 import type { Request, Response } from "express";
-import { registerUser, loginUser, createRegistrationChallenge } from "../services/auth.service.js";
+import {
+  registerUser,
+  loginUser,
+  createWalletChallenge,
+  type ChallengePurpose,
+} from "../services/auth.service.js";
 import { User, DEPARTMENT_REQUIRED_ROLES } from "../models/user.model.js";
 
 /**
  * POST /api/auth/challenge
  *
- * Step 1 of registration: issues a one-time EIP-712 nonce for a wallet
- * address. The client must sign it with that wallet (proving key ownership)
- * and pass the resulting signature to POST /api/auth/register.
+ * Issues a one-time EIP-712 nonce for a wallet address, for either of two
+ * purposes: "registration" (client signs it and passes the signature to
+ * POST /api/auth/register) or "login" (signs it and passes the signature to
+ * POST /api/auth/login, proving continued control of the wallet already on
+ * file for that account).
  *
- * Request body: { "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" }
+ * Request body:
+ * { "walletAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", "purpose": "registration" }
  */
 export async function challenge(req: Request, res: Response): Promise<void> {
   try {
-    const { walletAddress } = req.body;
+    const { walletAddress, purpose } = req.body;
 
     if (!walletAddress) {
       res.status(400).json({ success: false, error: "walletAddress is required" });
       return;
     }
 
-    const result = await createRegistrationChallenge(walletAddress);
+    if (purpose !== "registration" && purpose !== "login") {
+      res.status(400).json({
+        success: false,
+        error: "purpose must be one of: registration, login",
+      });
+      return;
+    }
+
+    const result = await createWalletChallenge(walletAddress, purpose as ChallengePurpose);
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create challenge";
@@ -118,28 +134,32 @@ export async function register(req: Request, res: Response): Promise<void> {
 /**
  * POST /api/auth/login
  *
- * Logs in a user and returns a JWT token.
+ * Logs in a user and returns a JWT token. Requires a signature (from
+ * POST /api/auth/challenge with purpose "login") proving the caller still
+ * controls the wallet already on file for this account — email+password
+ * proves account knowledge, the signature proves current wallet control.
  *
  * Request body:
  * {
  *   "email": "john@police.gov",
- *   "password": "securepassword"
+ *   "password": "securepassword",
+ *   "signature": "0x..."
  * }
  */
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password } = req.body;
+    const { email, password, signature } = req.body;
 
     // ── Input validation ──────────────────────────────────────────────────────
-    if (!email || !password) {
+    if (!email || !password || !signature) {
       res.status(400).json({
         success: false,
-        error: "Email and password are required",
+        error: "Email, password, and signature are required",
       });
       return;
     }
 
-    const result = await loginUser({ email, password });
+    const result = await loginUser({ email, password, signature });
 
     res.status(200).json({
       success: true,
@@ -148,7 +168,12 @@ export async function login(req: Request, res: Response): Promise<void> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Login failed";
-    const status = message.includes("Invalid") ? 401 : 500;
+    const status =
+      message.includes("Invalid") ||
+      message.includes("wallet ownership") ||
+      message.includes("wallet challenge")
+        ? 401
+        : 500;
     res.status(status).json({ success: false, error: message });
   }
 }

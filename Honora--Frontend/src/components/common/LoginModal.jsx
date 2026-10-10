@@ -76,13 +76,17 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
       return;
     }
 
+    // Wallet is required for both flows now: at signup it proves ownership
+    // of the wallet being registered; at login it proves continued control
+    // of the wallet already on file for the account.
+    if (!walletAddress) {
+      setError("Please connect your wallet.");
+      return;
+    }
+
     if (isSignup) {
       if (!name.trim()) {
         setError("Full name is required.");
-        return;
-      }
-      if (!walletAddress) {
-        setError("Please connect your wallet.");
         return;
       }
       if (departmentRequired && !department.trim()) {
@@ -102,7 +106,7 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
         // it with the connected wallet, then submit. Proves the signer
         // actually controls walletAddress's private key — not just its
         // public string.
-        const challengeRes = await requestWalletChallenge(walletAddress);
+        const challengeRes = await requestWalletChallenge(walletAddress, "registration");
         const { domain, types, value } = challengeRes.data;
         const signature = await signTypedData(walletAddress, domain, types, value);
 
@@ -116,7 +120,14 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
           signature
         );
       } else {
-        result = await login(email.trim(), password.trim());
+        // Same proof, but for login: proves the person logging in still
+        // controls the wallet already on file for this account, not just
+        // that they know the password.
+        const challengeRes = await requestWalletChallenge(walletAddress, "login");
+        const { domain, types, value } = challengeRes.data;
+        const signature = await signTypedData(walletAddress, domain, types, value);
+
+        result = await login(email.trim(), password.trim(), signature);
       }
 
       // Check if the result has the data we need
@@ -175,43 +186,43 @@ export default function LoginModal({ role, onClose, initialSignup = false }) {
             </div>
           )}
 
-          {/* Wallet Connection (Signup Only) — must be a real connected
-              wallet, not typed text, since it needs to sign a proof-of-
-              ownership challenge before registration is accepted. */}
-          {isSignup && (
-            <div className="input-group">
-              <label>Wallet</label>
-              {walletAddress ? (
-                <div className="wallet-connected">
-                  <span>
-                    ✅ {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
-                  </span>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => setWalletAddress("")}
-                  >
-                    Change
-                  </button>
-                </div>
-              ) : (
+          {/* Wallet Connection (both signup and login) — must be a real
+              connected wallet, not typed text, since it needs to sign a
+              proof-of-ownership challenge: at signup, proving the wallet
+              being registered; at login, proving continued control of the
+              wallet already on file for the account. */}
+          <div className="input-group">
+            <label>Wallet</label>
+            {walletAddress ? (
+              <div className="wallet-connected">
+                <span>
+                  ✅ {walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}
+                </span>
                 <button
                   type="button"
-                  className="btn-gold modal-btn"
-                  onClick={handleConnectWallet}
-                  disabled={walletConnecting}
+                  className="link-button"
+                  onClick={() => setWalletAddress("")}
                 >
-                  {walletConnecting ? (
-                    <span className="loader" />
-                  ) : isWalletAvailable() ? (
-                    "Connect Wallet"
-                  ) : (
-                    "Install a wallet extension"
-                  )}
+                  Change
                 </button>
-              )}
-            </div>
-          )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="btn-gold modal-btn"
+                onClick={handleConnectWallet}
+                disabled={walletConnecting}
+              >
+                {walletConnecting ? (
+                  <span className="loader" />
+                ) : isWalletAvailable() ? (
+                  "Connect Wallet"
+                ) : (
+                  "Install a wallet extension"
+                )}
+              </button>
+            )}
+          </div>
 
           {/* Department Field (Signup Only, Police/Forensic only) */}
           {isSignup && departmentRequired && (

@@ -5,7 +5,7 @@ import { ethers } from "ethers";
 import app from "../src/app.js";
 import { connectDB } from "../src/config/db.js";
 import { POLICE_KEY, FORENSIC_KEY, LAWYER_KEY, JUDGE_KEY } from "./setup/global-setup.js";
-import { signRegistrationChallenge } from "./setup/wallet-signing.js";
+import { signRegistrationChallenge, signWalletChallenge } from "./setup/wallet-signing.js";
 
 const policeWallet = new ethers.Wallet(POLICE_KEY).address;
 const forensicWallet = new ethers.Wallet(FORENSIC_KEY).address;
@@ -24,21 +24,31 @@ describe("POST /api/auth/challenge", () => {
   it("issues an EIP-712 challenge for a valid wallet address", async () => {
     const res = await request(app)
       .post("/api/auth/challenge")
-      .send({ walletAddress: policeWallet });
+      .send({ walletAddress: policeWallet, purpose: "registration" });
 
     expect(res.status).toBe(200);
     expect(res.body.data.domain.name).toBe("Honora EMS");
     expect(res.body.data.value.walletAddress).toBe(policeWallet);
     expect(res.body.data.value.nonce).toBeTruthy();
+    expect(res.body.data.value.purpose).toBe("registration");
   });
 
   it("rejects a malformed wallet address", async () => {
     const res = await request(app)
       .post("/api/auth/challenge")
-      .send({ walletAddress: "not-a-wallet-address" });
+      .send({ walletAddress: "not-a-wallet-address", purpose: "registration" });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/invalid wallet address/i);
+  });
+
+  it("rejects a missing or invalid purpose", async () => {
+    const res = await request(app)
+      .post("/api/auth/challenge")
+      .send({ walletAddress: policeWallet });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/purpose must be one of/i);
   });
 });
 
@@ -100,7 +110,9 @@ describe("POST /api/auth/register", () => {
 
     // Request a challenge for otherWallet too, so the "no active challenge"
     // check passes and the signature mismatch itself is what's exercised
-    await request(app).post("/api/auth/challenge").send({ walletAddress: otherWallet.address });
+    await request(app)
+      .post("/api/auth/challenge")
+      .send({ walletAddress: otherWallet.address, purpose: "registration" });
 
     const res = await request(app).post("/api/auth/register").send({
       name: "Mismatched Signature",
@@ -295,20 +307,35 @@ describe("POST /api/auth/register", () => {
 });
 
 describe("POST /api/auth/login", () => {
-  it("logs in with correct credentials", async () => {
+  it("logs in with correct credentials and a valid wallet signature", async () => {
+    const { signature } = await signWalletChallenge(app, POLICE_KEY, "login");
+
     const res = await request(app).post("/api/auth/login").send({
       email: "police-ok@test.local",
       password: "password123",
+      signature,
     });
 
     expect(res.status).toBe(200);
     expect(res.body.data.token).toBeTruthy();
   });
 
+  it("rejects login with no signature", async () => {
+    const res = await request(app).post("/api/auth/login").send({
+      email: "police-ok@test.local",
+      password: "password123",
+    });
+
+    expect(res.status).toBe(400);
+  });
+
   it("rejects an incorrect password", async () => {
+    // Fails the password check, before wallet verification — placeholder
+    // signature is enough.
     const res = await request(app).post("/api/auth/login").send({
       email: "police-ok@test.local",
       password: "wrong-password",
+      signature: "0x00",
     });
 
     expect(res.status).toBe(401);
@@ -318,17 +345,55 @@ describe("POST /api/auth/login", () => {
     const res = await request(app).post("/api/auth/login").send({
       email: "nobody-registered@test.local",
       password: "password123",
+      signature: "0x00",
     });
 
     expect(res.status).toBe(401);
+  });
+
+  it("rejects login when no wallet challenge was requested", async () => {
+    // Correct credentials, but no POST /api/auth/challenge (purpose "login")
+    // was ever issued for this account's wallet in this test.
+    const res = await request(app).post("/api/auth/login").send({
+      email: "lawyer-no-department@test.local",
+      password: "password123",
+      signature: "0x00",
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/no active wallet challenge/i);
+  });
+
+  it("rejects login when the signature doesn't match the account's registered wallet", async () => {
+    // Sign a real "login" challenge, but for a different wallet than the
+    // one on file for this account.
+    const { signature } = await signWalletChallenge(app, FORENSIC_KEY, "login");
+
+    // Request a "login" challenge for the Police account's own wallet too,
+    // so the "no active challenge" check passes and the mismatch itself is
+    // what's exercised.
+    await request(app)
+      .post("/api/auth/challenge")
+      .send({ walletAddress: policeWallet, purpose: "login" });
+
+    const res = await request(app).post("/api/auth/login").send({
+      email: "police-ok@test.local",
+      password: "password123",
+      signature, // valid signature, but for forensicWallet's challenge, not policeWallet's
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/wallet ownership not proven/i);
   });
 });
 
 describe("GET /api/auth/me", () => {
   it("returns the authenticated user's profile with a valid token", async () => {
+    const { signature } = await signWalletChallenge(app, POLICE_KEY, "login");
     const login = await request(app).post("/api/auth/login").send({
       email: "police-ok@test.local",
       password: "password123",
+      signature,
     });
     const token = login.body.data.token;
 

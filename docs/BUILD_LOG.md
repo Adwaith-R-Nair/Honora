@@ -671,6 +671,69 @@ Follow-ups spawned: none. Idle-suspension window confirmed against Qdrant's own 
 reactivated." The daily cron is a 7x margin against the 1-week suspension threshold — no change
 needed.
 
+### 2026-10-10 — fix: use dedicated Pinata gateway instead of the public one
+Phase: none (unplanned ops fix — surfaced during pre-conference demo verification)
+What changed: `gateway.pinata.cloud` (Pinata's shared public gateway) was confirmed independently
+down/unreachable — timed out even from outside any Honora infra, not a code bug. Found this
+Pinata account already has a dedicated gateway configured
+(`purple-quickest-rooster-511.mypinata.cloud`) and unused. Added `PINATA_GATEWAY_DOMAIN` to
+`backend/src/config/env.ts` (defaults to the old public gateway if unset, so this is backward
+compatible), and switched all 4 hardcoded `gateway.pinata.cloud` URL constructions in
+`evidence.controller.ts`/`supportingDoc.controller.ts` to use it. The AI service needed no changes
+at all — it only ever reads whatever `ipfsUrl` the backend already constructed, so fixing it in one
+place fixed both "View on IPFS" links and AI-indexing file downloads.
+Verified: dedicated gateway confirmed fast and reliable (~4s) where the public one timed out
+entirely; real file downloads for AI indexing succeeded afterward (see commit below).
+Follow-ups spawned: none.
+
+### 2026-10-10 — feat: require wallet signature at login, not just password
+Phase: none (unplanned — Adwaith's own idea, raised while reviewing the demo: registration already
+proves wallet ownership cryptographically, login still didn't)
+What changed: login is now two-factor — email+password (unchanged) plus an EIP-712 signature
+proving the caller currently controls the exact wallet already on file for that account. Reused
+almost all of registration's existing wallet-ownership-proof infrastructure rather than building a
+parallel system:
+- `backend/src/utils/eip712.ts`: renamed `REGISTRATION_TYPES`/`getRegistrationDomain` to
+  `WALLET_CHALLENGE_TYPES`/`getWalletChallengeDomain` (and the EIP-712 struct name from
+  `Registration` to `WalletChallenge`) — purely a naming cleanup now that the same typed-data shape
+  serves two purposes, no behavior change.
+- `backend/src/services/auth.service.ts`: `createRegistrationChallenge` generalized to
+  `createWalletChallenge(walletAddress, purpose)` where `purpose` is `"registration"` or `"login"` —
+  this is the field that keeps a signature obtained for one from being replayed as the other.
+  `loginUser` now looks up the challenge for the account's own *stored* `walletAddress` (never a
+  client-supplied one — there's no way to point the check at a different wallet than the one
+  actually on record), verifies the signature, and only then issues the JWT. Ordering is
+  deliberate: password checked first (unchanged, cheap), wallet signature checked second, so a
+  wrong password still returns the same generic "Invalid email or password" without leaking
+  anything about wallet-challenge state to an unauthenticated prober.
+- `backend/src/controllers/auth.controller.ts`: `/api/auth/challenge` now requires `purpose` in the
+  body; `/api/auth/login` now requires `signature` alongside email/password.
+- Frontend (`LoginModal.jsx`, `useAuth.jsx`, `api.js`): the login form now shows the same Connect
+  Wallet UI signup already had; submit does the same challenge→sign→submit dance, with
+  `purpose: "login"`.
+- `scripts/seed.ts`: this would have silently broken — `ensureUser`'s login-first check has no way
+  to produce a signature without knowing the private key. Added the four demo accounts' well-known
+  Hardhat private keys (same ones already used throughout this project's test infra) and a
+  `getWalletSignature` helper so reseeding still works end-to-end.
+Verified: full backend suite 44/44 passing (added dedicated tests: missing signature, no active
+login challenge, signature-for-a-different-wallet rejected). Then verified against the *live* demo
+backend directly (not just the isolated test chain): scripted login succeeded for all 4 real demo
+accounts (Police/Forensic/Lawyer/Judge) with real signatures. Then verified live in a real browser
+with real MetaMask for the Police account specifically: connect wrong wallet → correctly offered
+to reconnect; switched to the correct demo wallet → signed the real "login" challenge → landed on
+the real dashboard with real case data. Forensic/Lawyer/Judge were not independently click-tested
+in-browser (same frontend code path as Police, already proven twice over by the automated suite and
+the direct API test) — worth a quick manual click-through for full peace of mind before relying on
+it live, but not treated as a real risk.
+Gotcha — the one that mattered most: deploying this requires rebuilding the backend Docker image,
+and that's exactly what wiped the demo's on-chain evidence earlier in this same session (see the
+"Reconcile supporting-docs"-era entries above). This time: `docker compose build backend` (pure
+image build, no container lifecycle touched) followed by `docker compose up -d --no-deps backend`
+(`--no-deps` explicitly tells Compose not to touch this service's dependencies) — confirmed via
+the chain's block number before and after (unchanged) that `hardhat-node`/`contract-deploy` were
+never touched this time.
+Follow-ups spawned: click-test Forensic/Lawyer/Judge login live before presenting, if there's time.
+
 ---
 
 ## Phase 10 — AI Layer Expansion

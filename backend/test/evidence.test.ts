@@ -48,10 +48,9 @@ beforeAll(async () => {
   if (register.status !== 201) {
     throw new Error(`Test setup registration failed: ${JSON.stringify(register.body)}`);
   }
-  const login = await request(app)
-    .post("/api/auth/login")
-    .send({ email: "evidence-police@test.local", password: "password123" });
-  policeToken = login.body.data.token;
+  // register already returns a token directly — no need for a separate
+  // login call just to fetch test setup credentials.
+  policeToken = register.body.data.token;
 });
 
 afterAll(async () => {

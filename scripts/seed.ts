@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { resolve, basename } from "path";
 import * as dotenv from "dotenv";
+import { ethers } from "ethers";
 
 dotenv.config({ path: resolve("backend/.env") });
 
@@ -19,6 +20,10 @@ dotenv.config({ path: resolve("backend/.env") });
 const BACKEND_URL = "http://localhost:3000";
 
 // ── Test Users ────────────────────────────────────────────────────────────────
+// privateKey is the well-known, deterministic Hardhat test account matching
+// each walletAddress (same ones used throughout this project's test
+// infrastructure) — needed to sign the login challenge below; never used
+// outside this disposable local chain.
 const TEST_USERS = [
   {
     name: "Officer Rajan",
@@ -26,6 +31,7 @@ const TEST_USERS = [
     password: "police123",
     role: "Police",
     walletAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    privateKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
   },
   {
     name: "Dr. Priya Forensics",
@@ -33,6 +39,7 @@ const TEST_USERS = [
     password: "forensic123",
     role: "Forensic",
     walletAddress: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    privateKey: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
   },
   {
     name: "Adv. Suresh Lawyer",
@@ -40,6 +47,7 @@ const TEST_USERS = [
     password: "lawyer123",
     role: "Lawyer",
     walletAddress: "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    privateKey: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
   },
   {
     name: "Justice Menon",
@@ -47,6 +55,7 @@ const TEST_USERS = [
     password: "judge123",
     role: "Judge",
     walletAddress: "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    privateKey: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
   },
 ];
 
@@ -98,33 +107,61 @@ function getFilesInFolder(folderPath: string): string[] {
     .map((f) => resolve(folderPath, f));
 }
 
+// ── Helper — Sign a wallet challenge for login or registration ───────────────
+async function getWalletSignature(
+  privateKey: string,
+  purpose: "registration" | "login"
+): Promise<string> {
+  const wallet = new ethers.Wallet(privateKey);
+  const challengeRes = await fetch(`${BACKEND_URL}/api/auth/challenge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ walletAddress: wallet.address, purpose }),
+  });
+  const challengeData = (await challengeRes.json()) as any;
+  if (!challengeRes.ok) {
+    throw new Error(`Challenge request failed for ${wallet.address}: ${challengeData.error}`);
+  }
+  const { domain, types, value } = challengeData.data;
+  return wallet.signTypedData(domain, types, value);
+}
+
 // ── Helper — Register or login user ──────────────────────────────────────────
 async function ensureUser(user: typeof TEST_USERS[0]): Promise<string> {
-  // Try login first
+  // Try login first — proves both password knowledge and current control of
+  // the wallet already on file for this account.
+  const loginSignature = await getWalletSignature(user.privateKey, "login");
   const loginRes = await fetch(`${BACKEND_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: user.email, password: user.password }),
+    body: JSON.stringify({
+      email: user.email,
+      password: user.password,
+      signature: loginSignature,
+    }),
   });
 
   if (loginRes.ok) {
-    const data = await loginRes.json() as any;
+    const data = (await loginRes.json()) as any;
     return data.data.token;
   }
 
-  // If login fails, register
+  // If login fails, register (first-time setup). privateKey never leaves
+  // this script — only the resulting signature is sent over the wire.
+  const { privateKey, ...registerBody } = user;
+  const registerSignature = await getWalletSignature(privateKey, "registration");
   const registerRes = await fetch(`${BACKEND_URL}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user),
+    body: JSON.stringify({ ...registerBody, signature: registerSignature }),
   });
 
   if (!registerRes.ok) {
-    const err = await registerRes.json() as any;
+    const err = (await registerRes.json()) as any;
     throw new Error(`Failed to register ${user.email}: ${err.error}`);
   }
 
-  const data = await registerRes.json() as any;
+  const data = (await registerRes.json()) as any;
   return data.data.token;
 }
 

@@ -28,8 +28,10 @@ async function registerAndLogin(role: string, key: string, emailPrefix: string) 
   if (register.status !== 201) {
     throw new Error(`Test setup registration failed for ${role}: ${JSON.stringify(register.body)}`);
   }
-  const login = await request(app).post("/api/auth/login").send({ email, password: "password123" });
-  return login.body.data.token as string;
+  // register already returns a token directly — no need for a separate
+  // login call (which would now also need its own wallet-challenge dance)
+  // just to fetch test setup credentials.
+  return register.body.data.token as string;
 }
 
 let policeToken: string;
