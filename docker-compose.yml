@@ -44,6 +44,14 @@ services:
       dockerfile: backend/Dockerfile
     env_file: backend/.env
     environment:
+      # Overrides the image's baked-in `ENV NODE_ENV=production`
+      # (backend/Dockerfile) for this local-demo stack only. NODE_ENV has
+      # exactly one effect in this codebase: seed.routes.ts's DELETE
+      # /api/seed/clear refuses to run when it's "production", as a guard
+      # against wiping real data on a real deployment. This compose stack is
+      # always a local/demo environment, never that, so the guard should
+      # stay open here — matching `npm run dev`'s behavior outside Docker.
+      NODE_ENV: development
       RPC_URL: http://hardhat-node:8545
       # Deterministic — verified empirically against this exact codebase: on
       # a fresh ephemeral chain (no volume for chain state), setup.ts's
