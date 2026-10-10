@@ -76,7 +76,7 @@ export async function uploadSupportingDoc(
     // Step 3: Upload to IPFS
     console.log(`[SupportingDoc] Uploading to IPFS: ${originalname}`);
     const ipfsCID = await uploadToIPFS(buffer, originalname);
-    const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsCID}`;
+    const ipfsUrl = `https://${ENV.PINATA_GATEWAY_DOMAIN}/ipfs/${ipfsCID}`;
     console.log(`[SupportingDoc] CID: ${ipfsCID}`);
 
     // Step 4: Get signer private key based on user role
@@ -199,7 +199,7 @@ export async function getSupportingDocsByEvidence(
         fileHash:   doc.fileHash,
         uploadedBy: doc.uploadedBy,
         timestamp:  doc.timestamp.toString(),
-        ipfsUrl:    `https://gateway.pinata.cloud/ipfs/${doc.ipfsCID}`,
+        ipfsUrl:    `https://${ENV.PINATA_GATEWAY_DOMAIN}/ipfs/${doc.ipfsCID}`,
       };
     });
 

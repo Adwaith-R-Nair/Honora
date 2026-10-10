@@ -70,7 +70,7 @@ export async function uploadEvidence(
     // Step 3: Upload to IPFS
     console.log(`[Evidence] Uploading to IPFS: ${originalname}`);
     const ipfsCID = await uploadToIPFS(buffer, originalname);
-    const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsCID}`;
+    const ipfsUrl = `https://${ENV.PINATA_GATEWAY_DOMAIN}/ipfs/${ipfsCID}`;
     console.log(`[Evidence] CID: ${ipfsCID}`);
 
     // Step 4: Register on-chain
@@ -180,7 +180,7 @@ export async function getEvidenceById(
         uploadedBy:    onChain.uploadedBy,
         timestamp:     onChain.timestamp.toString(),
         currentHolder: onChain.currentHolder,
-        ipfsUrl:       `https://gateway.pinata.cloud/ipfs/${onChain.ipfsCID}`,
+        ipfsUrl:       `https://${ENV.PINATA_GATEWAY_DOMAIN}/ipfs/${onChain.ipfsCID}`,
         status:        meta?.status ?? "Under Investigation",
       },
     });

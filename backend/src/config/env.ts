@@ -19,6 +19,13 @@ export const ENV = {
   JWT_EXPIRES_IN: process.env["JWT_EXPIRES_IN"] ?? "24h",
   PORT: parseInt(process.env["PORT"] ?? "3000", 10),
   AI_SERVICE_URL: process.env["AI_SERVICE_URL"] ?? "http://localhost:8000",
+  // Pinata's shared public gateway (gateway.pinata.cloud) is frequently slow
+  // or unreachable under load — confirmed independently timing out outside
+  // any Honora infra on 2026-10-10. A dedicated gateway (free with any
+  // Pinata account, Dashboard -> Gateways) doesn't share that congestion.
+  // Falls back to the public gateway if unset, so this stays optional.
+  PINATA_GATEWAY_DOMAIN:
+    process.env["PINATA_GATEWAY_DOMAIN"] ?? "gateway.pinata.cloud",
   CORS_ORIGINS: process.env["CORS_ORIGINS"]?.split(",") ?? [
     "http://localhost:5173",
     "http://localhost:3001",
