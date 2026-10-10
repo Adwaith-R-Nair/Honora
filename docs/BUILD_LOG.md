@@ -737,6 +737,73 @@ the chain's block number before and after (unchanged, both at deploy time and ag
 live login tests) that `hardhat-node`/`contract-deploy` were never touched.
 Follow-ups spawned: none. All 4 roles fully verified; ready to present.
 
+### 2026-10-10 — 40aa52e — fix: don't disable dev-only seed-clear route inside Docker
+Phase: none (unplanned — found during the full pre-conference end-to-end QA pass, restarting the
+whole Docker stack from a cold boot for the first time since the wallet-login work)
+What changed: `backend/Dockerfile`'s runtime stage bakes in `ENV NODE_ENV=production` (a
+reasonable default for an optimized image), but `DELETE /api/seed/clear`
+(`backend/src/routes/seed.routes.ts`) refuses to run whenever `NODE_ENV === "production"`, as a
+guard against wiping real data on a real deployment. `NODE_ENV` has no other use anywhere in the
+backend. Since this Docker stack is only ever a local/demo environment, the guard was silently
+blocking itself every time `scripts/seed.ts` tried to clear stale evidence before reseeding — the
+clear 404'd, Mongo kept the previous run's `evidenceId`s, and every evidence upload failed with a
+duplicate-key error. Fixed with one line in `docker-compose.yml`'s backend `environment:` block
+(`NODE_ENV: development`), which overrides the image's baked-in value for this stack only, without
+touching the Dockerfile's general production-build semantics.
+Verified: reproduced the failure live (all 23 seeded uploads failed with `E11000 duplicate key`),
+fixed it, then tore the whole stack down and brought it back up fresh (`docker compose down && up
+-d`) to get a genuinely clean chain, and reran the full seed twice — second run clean, all 23
+evidence items + forensic/lawyer supporting docs uploaded with zero errors.
+Follow-ups spawned: none.
+
+### 2026-10-10 — Full pre-conference end-to-end QA pass (no code changes beyond the commit above)
+Phase: none (hands-on verification ahead of presenting at c0c0n, following
+`DEMO_READINESS_MASTER_PLAN.md`, gitignored, not part of the repo)
+What was verified, live, in a real browser with real MetaMask approvals from Adwaith for every
+wallet step:
+- **All 4 role logins** (Police/Forensic/Lawyer/Judge) against the freshly reseeded stack — each
+  reached its correct dashboard with real seeded data.
+- **Custody transfer**: Police → Forensic on Case 3 (Jewellery Store Robbery, Panampilly) — no
+  MetaMask prompt needed, confirming transfers are signed server-side by the backend's own role
+  key, not the user's wallet. Chain-of-custody view showed both the initial mint and the transfer
+  with real tx hashes.
+- **Integrity verification, both outcomes**: downloaded the real file from the IPFS gateway,
+  verified it clean (exact SHA-256 match, green "Integrity Verified"), then flipped one byte and
+  re-verified — clean red "Integrity Failed" with the mismatched computed hash shown. This is the
+  centerpiece of the live demo and both paths work exactly as designed.
+- **RBAC enforcement**: hit `POST /api/evidence/upload` directly (bypassing the UI entirely) while
+  authenticated as Forensic — correctly rejected with 403 and a clear role-mismatch message,
+  confirming the check is real server-side enforcement, not just a hidden button.
+- **AI semantic search**: a natural-language query ("drug trafficking near Kochi") correctly
+  surfaced the Fort Kochi and Kaloor narcotics cases with real similarity scores from Qdrant.
+- **AI-service resilience**: stopped the `ai-service` container entirely, then uploaded evidence
+  as Police via a scripted login — upload still succeeded (201), confirming the fire-and-forget
+  AI-indexing design never blocks core evidence operations.
+- **Cloud dependencies**: Pinata's dedicated gateway and Qdrant Cloud both confirmed live with
+  real data (not just a 200 on `/health` — actually fetched a real seeded file by CID, and listed
+  the real `evidence_vectors` collection).
+Gotchas found, not yet needing a code fix:
+- **Cross-case linkage didn't fire** for the one evidence pair tested (two narcotics FIRs, Fort
+  Kochi vs. Kaloor) — the endpoint itself works correctly (`200`, well-formed response), it just
+  didn't cross the 0.72 similarity threshold for that specific pair. Don't promise a specific
+  cross-case-linkage "hit" live in the demo without re-testing which exact evidence pair actually
+  triggers it beforehand — the semantic search path is the safer, already-proven AI demo beat.
+- **`docker compose stop`/`start` on a single service is not as surgical as it looks.** Testing AI
+  resilience, `docker compose stop ai-service` then `docker compose start ai-service` silently
+  re-ran the one-shot `contract-deploy` job (walking the `depends_on` chain:
+  `ai-service → backend → contract-deploy`), deploying a **second**, orphaned `EvidenceRegistry`
+  contract at a new address. `hardhat-node` itself was never restarted (confirmed via its
+  container uptime), so no demo data was lost, and the backend's `CONTRACT_ADDRESS` is hardcoded
+  in `docker-compose.yml` so it kept using the original, correct contract throughout — but this is
+  a real footgun for later. Use `docker compose restart <service>` to bounce a single service
+  instead of `stop` + `start`.
+Also confirmed MetaMask behavior from the wallet-login work still holds exactly as documented: the
+plain "Connect Wallet" button reuses whatever account was last active in the extension instead of
+prompting, so switching roles requires clicking "Change" to force the account picker — not a bug,
+just something to remember to do on stage.
+Follow-ups spawned: none. System is fully demo-ready — every flow in the actual presentation
+script has been independently verified live, not just via automated tests.
+
 ---
 
 ## Phase 10 — AI Layer Expansion
