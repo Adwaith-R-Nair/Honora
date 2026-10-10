@@ -723,16 +723,19 @@ with real MetaMask for the Police account specifically: connect wrong wallet →
 to reconnect; switched to the correct demo wallet → signed the real "login" challenge → landed on
 the real dashboard with real case data. Forensic/Lawyer/Judge were not independently click-tested
 in-browser (same frontend code path as Police, already proven twice over by the automated suite and
-the direct API test) — worth a quick manual click-through for full peace of mind before relying on
-it live, but not treated as a real risk.
+the direct API test). **Update, same day:** Adwaith imported all 4 demo wallets into MetaMask and
+we click-tested every single one live — Forensic, Lawyer, and Judge each correctly connected their
+own wallet, signed a real "login" challenge, and landed on their own real dashboard with real case
+data. All 4 roles now independently confirmed working end-to-end in the actual browser, not just
+via automated tests or the API.
 Gotcha — the one that mattered most: deploying this requires rebuilding the backend Docker image,
 and that's exactly what wiped the demo's on-chain evidence earlier in this same session (see the
 "Reconcile supporting-docs"-era entries above). This time: `docker compose build backend` (pure
 image build, no container lifecycle touched) followed by `docker compose up -d --no-deps backend`
 (`--no-deps` explicitly tells Compose not to touch this service's dependencies) — confirmed via
-the chain's block number before and after (unchanged) that `hardhat-node`/`contract-deploy` were
-never touched this time.
-Follow-ups spawned: click-test Forensic/Lawyer/Judge login live before presenting, if there's time.
+the chain's block number before and after (unchanged, both at deploy time and again after all 4
+live login tests) that `hardhat-node`/`contract-deploy` were never touched.
+Follow-ups spawned: none. All 4 roles fully verified; ready to present.
 
 ---
 
